@@ -10,6 +10,7 @@ import {
   orderBy 
 } from "firebase/firestore";
 import { INITIAL_ATTENDANCE } from "../constants/mockData";
+import { determineAttendanceStatus, calculateWorkHours } from "../utils/attendanceHelpers";
 
 // Local storage helper
 const getLocalAttendance = () => {
@@ -78,9 +79,8 @@ export const attendanceService = {
     const today = new Date().toISOString().split("T")[0];
     const nowTime = new Date().toLocaleTimeString("en-US", { hour12: false, hour: '2-digit', minute: '2-digit' });
     
-    // Check if punch-in is after 09:00 AM for status "Late"
-    const [hours, minutes] = nowTime.split(":").map(Number);
-    const status = (hours > 9 || (hours === 9 && minutes > 0)) ? "Late" : "Present";
+    // Check if punch-in is after 09:30 AM for status "Late"
+    const status = determineAttendanceStatus(nowTime, null, today);
 
     const newRecord = {
       employeeId,
@@ -119,30 +119,36 @@ export const attendanceService = {
       // We need to fetch the document to calculate the total hours
       const snapshot = await getDocs(query(collection(db, "attendance")));
       let punchInTime = "09:00";
+      let punchDate = new Date().toISOString().split("T")[0];
       snapshot.forEach((doc) => {
         if (doc.id === recordId) {
           punchInTime = doc.data().punchIn;
+          punchDate = doc.data().date;
         }
       });
       
-      const totalHours = calculateHours(punchInTime, nowTime);
+      const totalHours = calculateWorkHours(punchInTime, nowTime, punchDate);
+      const finalStatus = determineAttendanceStatus(punchInTime, totalHours, punchDate);
       const updates = {
         punchOut: nowTime,
-        totalHours: totalHours
+        totalHours: totalHours,
+        status: finalStatus
       };
       
       await updateDoc(docRef, updates);
-      return { id: recordId, punchOut: nowTime, totalHours };
+      return { id: recordId, punchOut: nowTime, totalHours, status: finalStatus };
     } else {
       const records = getLocalAttendance();
       const idx = records.findIndex(r => r.id === recordId);
       
       if (idx !== -1) {
         const record = records[idx];
-        const totalHours = calculateHours(record.punchIn, nowTime);
+        const totalHours = calculateWorkHours(record.punchIn, nowTime, record.date);
+        const finalStatus = determineAttendanceStatus(record.punchIn, totalHours, record.date);
         
         record.punchOut = nowTime;
         record.totalHours = totalHours;
+        record.status = finalStatus;
         
         records[idx] = record;
         saveLocalAttendance(records);
@@ -152,18 +158,3 @@ export const attendanceService = {
     }
   }
 };
-
-// Utility to calculate hours between HH:MM strings
-function calculateHours(start, end) {
-  if (!start || !end) return 0;
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  
-  const startMin = sh * 60 + sm;
-  const endMin = eh * 60 + em;
-  
-  const diffMin = endMin - startMin;
-  if (diffMin <= 0) return 0;
-  
-  return parseFloat((diffMin / 60).toFixed(1));
-}
