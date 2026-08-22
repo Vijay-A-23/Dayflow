@@ -1,16 +1,39 @@
-# React + Vite
+# Dayflow — Modern Cloud HRMS & People Operations Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Dayflow is a real-time Human Resource Management System (HRMS) built with React, Vite, Tailwind CSS, and Cloud Firestore. It streamlines employee lifecycle management, attendance tracking, leave requests, and payroll summaries with deterministic employee identification and role-based access control (RBAC).
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Key Features
 
-## React Compiler
+* **Role-Based Access Control (RBAC):** Distinct dashboards and capabilities tailored for Administrators (HR Leadership) and standard Employees.
+* **Live Cloud Sync via Firestore:** Real-time listeners (`onSnapshot`) power zero-delay updates across leave requests, approval decisions, and daily attendance logs.
+* **Deterministic Custom Employee IDs:** Automatic generation of structured IDs following the `OIXXYYZZZZAAAA` standard (Company Prefix + Name Initials + Joining Year + Sequential Counter).
+* **Attendance Management:** Live daily punch clock tracking working hours, late marks, and real-time statuses.
+* **Leave Management:** Filterable leave lifecycle (All, Pending, Approved, Rejected) with automated quota tracking (Sick: 3, Casual: 1, Earned: 2).
+* **Employee Directory & Onboarding:** Searchable, filterable employee cards displaying designation, department, contact information, joining dates, and individual profiles.
+* **Localized Financials:** Support for Indian corporate structures, INR currency formats (₹ / LPA), and +91 contact details.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+* **Frontend:** React 18, Vite
+* **Styling:** Tailwind CSS, Lucide React (Icons)
+* **Backend & Auth:** Firebase Authentication (Email & Password)
+* **Database:** Google Cloud Firestore (Real-time synchronization)
+* **Routing:** React Router v6
+
+---
+
+## Project Structure
+
+```text
+src/
+├── components/          # Reusable UI elements (Navbar, Sidebar, Badges, Modals)
+├── context/             # Global providers (AuthContext, HRContext)
+├── pages/               # Views (Dashboard, EmployeeList, Profile, Attendance, Leaves, Login)
+├── services/            # Firestore data services (authService, leaveService, dbSeeder)
+├── utils/               # Utilities & ID generator algorithms
+├── App.jsx              # Routing and primary layout
+└── main.jsx             # React entry point
