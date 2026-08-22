@@ -12,20 +12,20 @@ import { Dashboard } from "./pages/Dashboard";
 import { EmployeeList } from "./pages/EmployeeList";
 import { Profile } from "./pages/Profile";
 import { Attendance } from "./pages/Attendance";
-import { LeaveManagement } from "./pages/LeaveManagement";
+import { Leaves } from "./pages/Leaves";
 
 // Main Layout Wrapper for Authenticated Pages
 const AppLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
-      <Navbar onMenuToggle={() => setIsSidebarOpen(prev => !prev)} />
+    <div className="flex min-h-screen bg-slate-950 text-slate-100">
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       
-      <div className="flex flex-1">
-        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div className="flex flex-1 flex-col lg:pl-64">
+        <Navbar onMenuToggle={() => setIsSidebarOpen(prev => !prev)} />
         
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-950/40">
+        <main className="flex-1 bg-slate-950/40 min-h-[calc(100vh-4rem)] overflow-y-auto">
           <Outlet />
         </main>
       </div>
@@ -50,7 +50,7 @@ export const App = () => {
             }>
               <Route path="/" element={<Dashboard />} />
               <Route path="/attendance" element={<Attendance />} />
-              <Route path="/leaves" element={<LeaveManagement />} />
+              <Route path="/leaves" element={<Leaves />} />
               <Route path="/profile" element={<Profile />} />
               
               {/* Admin-only exclusive route */}

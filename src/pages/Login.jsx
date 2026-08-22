@@ -135,30 +135,26 @@ export const Login = () => {
     }
   };
 
-  // One-click Demo Quick Access
-  const handleQuickLogin = async (role) => {
+  // Prefill Demo Credentials helper
+  const handlePrefill = (role) => {
     setError("");
     setFieldErrors({});
-    setLoading(true);
-    setLoadingRole(role);
+    setTab("login"); // Switch to login tab
 
-    try {
-      await quickLogin(role);
-      const roleLabel = role === "admin" ? "Admin (Eleanor Vance)" : "Employee (Alex Morgan)";
+    if (role === "admin") {
+      setEmail("admin@dayflow.com");
+      setPassword("password123");
       setToastMessage({
         type: "success",
-        text: `Logged in instantly as ${roleLabel}`
+        text: "Prefilled Admin credentials. Click Sign In!"
       });
-
-      // Quick visual feedback before route transition
-      setTimeout(() => {
-        navigate(destination, { replace: true });
-      }, 350);
-    } catch (err) {
-      console.error("Quick login error:", err);
-      setError("Demo login failed: " + (err.message || "Unknown error"));
-      setLoading(false);
-      setLoadingRole(null);
+    } else {
+      setEmail("employee@dayflow.com");
+      setPassword("password123");
+      setToastMessage({
+        type: "success",
+        text: "Prefilled Employee credentials. Click Sign In!"
+      });
     }
   };
 
@@ -222,10 +218,10 @@ export const Login = () => {
             <div className="flex items-center justify-between mb-2.5">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-violet-300">
                 <Zap className="h-3.5 w-3.5 text-violet-400 fill-violet-400" />
-                <span>Demo Quick Access</span>
+                <span>Prefill Demo Credentials</span>
               </div>
               <span className="text-[10px] font-medium text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700/50">
-                1-Click Instant Login
+                Click to Prefill Inputs
               </span>
             </div>
 
@@ -233,7 +229,7 @@ export const Login = () => {
               {/* Quick Admin Button */}
               <button
                 type="button"
-                onClick={() => handleQuickLogin("admin")}
+                onClick={() => handlePrefill("admin")}
                 disabled={loading}
                 className="group relative flex flex-col items-start gap-1 rounded-xl border border-violet-500/30 bg-violet-900/20 p-3 text-left transition-all duration-200 hover:border-violet-400 hover:bg-violet-900/40 hover:shadow-lg hover:shadow-violet-900/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
               >
@@ -242,22 +238,19 @@ export const Login = () => {
                     <Shield className="h-4 w-4 text-violet-400" />
                     <span>Admin Mode</span>
                   </div>
-                  {loadingRole === "admin" && (
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
-                  )}
                 </div>
                 <span className="text-[11px] text-slate-300 font-medium truncate w-full">
-                  Eleanor Vance
+                  Kavitha Sundaram
                 </span>
                 <span className="text-[10px] text-violet-400/80 font-mono truncate w-full">
-                  admin@dayflow.internal
+                  admin@dayflow.com
                 </span>
               </button>
 
               {/* Quick Employee Button */}
               <button
                 type="button"
-                onClick={() => handleQuickLogin("employee")}
+                onClick={() => handlePrefill("employee")}
                 disabled={loading}
                 className="group relative flex flex-col items-start gap-1 rounded-xl border border-indigo-500/30 bg-indigo-900/20 p-3 text-left transition-all duration-200 hover:border-indigo-400 hover:bg-indigo-900/40 hover:shadow-lg hover:shadow-indigo-900/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
               >
@@ -266,15 +259,12 @@ export const Login = () => {
                     <User className="h-4 w-4 text-indigo-400" />
                     <span>Employee Mode</span>
                   </div>
-                  {loadingRole === "employee" && (
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-                  )}
                 </div>
                 <span className="text-[11px] text-slate-300 font-medium truncate w-full">
-                  Alex Morgan
+                  Karthik Subramanian
                 </span>
                 <span className="text-[10px] text-indigo-400/80 font-mono truncate w-full">
-                  alex.morgan@dayflow.internal
+                  employee@dayflow.com
                 </span>
               </button>
             </div>
@@ -345,7 +335,7 @@ export const Login = () => {
                   <input
                     id="name"
                     type="text"
-                    placeholder="e.g. Eleanor Vance"
+                    placeholder="e.g. Kavitha Sundaram"
                     value={name}
                     onChange={(e) => {
                       setName(e.target.value);

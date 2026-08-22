@@ -626,11 +626,13 @@ export const Attendance = () => {
                         <div className="flex items-center gap-3">
                           <img
                             src={emp.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100"}
-                            alt={emp.name}
+                            alt={(emp.name && emp.name.toLowerCase() !== "employee" ? emp.name : "Karthik Subramanian")}
                             className="h-10 w-10 rounded-xl object-cover border border-slate-800"
                           />
                           <div>
-                            <h4 className="text-xs font-bold text-white">{emp.name}</h4>
+                            <h4 className="text-xs font-bold text-white">
+                              {emp.name && emp.name.toLowerCase() !== "employee" ? emp.name : "Karthik Subramanian"}
+                            </h4>
                             <p className="text-[10px] text-slate-400 font-semibold">{emp.department}</p>
                             <p className="text-[9px] text-slate-500 mt-1 font-mono">{subText}</p>
                           </div>
@@ -770,7 +772,12 @@ export const Attendance = () => {
                                 alt=""
                                 className="h-6.5 w-6.5 rounded-lg object-cover border border-slate-800"
                               />
-                              <span className="font-semibold text-slate-200">{emp?.name || punch.employeeName || punch.employeeId}</span>
+                              <span className="font-semibold text-slate-200">
+                                {(() => {
+                                  const nameVal = emp?.name || punch.employeeName;
+                                  return (nameVal && nameVal.toLowerCase() !== "employee") ? nameVal : "Karthik Subramanian";
+                                })()}
+                              </span>
                             </div>
                           </td>
                           <td className="px-5 py-3 text-slate-400 font-medium">{emp?.department || "N/A"}</td>

@@ -1,9 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { isFirebaseConfigured } from "../services/firebase";
-import { RoleSwitcher } from "./RoleSwitcher";
-import { LogOut, Bell, Menu, Database, Sparkles } from "lucide-react";
+import { LogOut, Bell, Menu, Sparkles } from "lucide-react";
 
 export const Navbar = ({ onMenuToggle }) => {
   const { userProfile, userRole, logout } = useAuth();
@@ -41,25 +39,8 @@ export const Navbar = ({ onMenuToggle }) => {
         </div>
       </div>
 
-      {/* Center status badges & Role switcher */}
-      <div className="hidden sm:flex items-center gap-3">
-        {isFirebaseConfigured ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400 border border-emerald-500/20">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Cloud Database Connected
-          </span>
-        ) : (
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400 border border-amber-500/20">
-              <Database className="h-3 w-3" />
-              Local Sandbox
-            </span>
-
-            {/* Quick Live Role Switcher */}
-            <RoleSwitcher />
-          </div>
-        )}
-      </div>
+      {/* Center Space */}
+      <div className="hidden sm:block" />
 
       {/* User profile & actions */}
       <div className="flex items-center gap-4">
@@ -71,15 +52,34 @@ export const Navbar = ({ onMenuToggle }) => {
         {/* User Card */}
         <div className="flex items-center gap-3 border-l border-slate-800 pl-4">
           <div className="text-right hidden md:block">
-            <p className="text-sm font-semibold text-white">{userProfile?.name || "User"}</p>
-            <p className="text-xs text-slate-400 capitalize">{userProfile?.role || userRole || "Employee"}</p>
+            <p className="text-sm font-semibold text-white">{userProfile?.name || ((userProfile?.role || userRole) === "admin" ? "Kavitha Sundaram" : "Karthik Subramanian")}</p>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border uppercase tracking-wider ${
+              (userProfile?.role || userRole) === "admin"
+                ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
+                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+            }`}>
+              {(userProfile?.role || userRole) === "admin" ? "Admin" : "Employee"}
+            </span>
           </div>
           
-          <img
-            src={userProfile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"}
-            alt={userProfile?.name || "Avatar"}
-            className="h-9 w-9 rounded-full object-cover ring-2 ring-violet-500/40"
-          />
+          {userProfile?.avatarUrl || userProfile?.avatar ? (
+            <img
+              src={userProfile.avatarUrl || userProfile.avatar}
+              alt={userProfile?.name || "Avatar"}
+              className="h-9 w-9 rounded-full object-cover ring-2 ring-violet-500/40"
+            />
+          ) : (
+            <div className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white ring-2 ring-violet-500/40 ${
+              (userProfile?.role || userRole) === "admin" 
+                ? "bg-gradient-to-br from-violet-500 to-indigo-600 shadow-md shadow-violet-500/10" 
+                : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md shadow-emerald-500/10"
+            }`}>
+              {(() => {
+                const name = userProfile?.name || ((userProfile?.role || userRole) === "admin" ? "Kavitha Sundaram" : "Karthik Subramanian");
+                return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+              })()}
+            </div>
+          )}
 
           <button
             onClick={handleLogout}

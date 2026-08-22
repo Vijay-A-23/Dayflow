@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useHR } from "../context/HRContext";
+import { generateCustomEmployeeId, parseSalaryToLakhs, formatLakhsToSalaryStr } from "../utils/employeeIdGenerator";
 import { 
   User, 
   Briefcase, 
@@ -68,24 +69,24 @@ export const Profile = () => {
     if (targetProfile) {
       setFormData({
         name: targetProfile.name || "",
-        personalEmail: targetProfile.personalEmail || "",
+        personalEmail: targetProfile.personalDetails?.personalEmail || targetProfile.personalEmail || "",
         email: targetProfile.email || "",
-        phone: targetProfile.phone || "",
-        emergencyContact: targetProfile.emergencyContact || "",
-        address: targetProfile.address || "",
-        dob: targetProfile.dob || "",
+        phone: targetProfile.personalDetails?.phone || targetProfile.phone || "",
+        emergencyContact: targetProfile.personalDetails?.emergencyContact || targetProfile.emergencyContact || "",
+        address: targetProfile.personalDetails?.address || targetProfile.address || "",
+        dob: targetProfile.personalDetails?.dob || targetProfile.dob || "",
         
-        department: targetProfile.department || "Engineering",
-        position: targetProfile.position || "",
-        manager: targetProfile.manager || "",
-        employmentType: targetProfile.employmentType || "Full-time",
-        workLocation: targetProfile.workLocation || "HQ - Office",
+        department: targetProfile.jobDetails?.department || targetProfile.department || "Engineering",
+        position: targetProfile.jobDetails?.position || targetProfile.position || "",
+        manager: targetProfile.jobDetails?.manager || targetProfile.manager || "",
+        employmentType: targetProfile.jobDetails?.employmentType || targetProfile.employmentType || "Full-time",
+        workLocation: targetProfile.jobDetails?.workLocation || targetProfile.workLocation || "HQ - Office",
         
-        salary: targetProfile.salary || "",
-        bankName: targetProfile.bankName || "",
-        bankAccount: targetProfile.bankAccount || "",
-        ifscCode: targetProfile.ifscCode || "",
-        taxId: targetProfile.taxId || ""
+        salary: parseSalaryToLakhs(targetProfile.salaryDetails?.baseSalary || targetProfile.salary || ""),
+        bankName: targetProfile.salaryDetails?.bankName || targetProfile.bankName || "",
+        bankAccount: targetProfile.salaryDetails?.accountNumber || targetProfile.bankAccount || "",
+        ifscCode: targetProfile.salaryDetails?.ifscCode || targetProfile.ifscCode || "",
+        taxId: targetProfile.salaryDetails?.taxId || targetProfile.taxId || ""
       });
     }
   }, [targetId, targetProfile]);
@@ -103,7 +104,10 @@ export const Profile = () => {
     setLoading(true);
     setSuccessMsg("");
     try {
-      await updateEmployee(targetProfile.id, formData);
+      await updateEmployee(targetProfile.id, {
+        ...formData,
+        salary: formatLakhsToSalaryStr(formData.salary)
+      });
       setIsEditing(false);
       setSuccessMsg("Profile details updated successfully!");
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -199,14 +203,18 @@ export const Profile = () => {
           <div className="relative px-6 pb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between -mt-14 mb-6 gap-4">
               <div className="flex items-end gap-4">
-                {targetProfile?.avatar ? (
+                {targetProfile?.avatarUrl || targetProfile?.avatar ? (
                   <img
-                    src={targetProfile.avatar}
+                    src={targetProfile.avatarUrl || targetProfile.avatar}
                     alt={targetProfile.name}
                     className="h-24 w-24 rounded-2xl object-cover border-4 border-slate-900 bg-slate-900 shadow-xl"
                   />
                 ) : (
-                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-slate-900 bg-slate-800 text-white font-display text-3xl font-extrabold shadow-xl">
+                  <div className={`flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-slate-900 text-white font-display text-3xl font-extrabold shadow-xl ${
+                    (targetProfile?.role || "employee") === "admin"
+                      ? "bg-gradient-to-br from-violet-500 to-indigo-600"
+                      : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                  }`}>
                     {getInitials(targetProfile?.name)}
                   </div>
                 )}
@@ -216,13 +224,22 @@ export const Profile = () => {
                     <h2 className="font-display text-xl md:text-2xl font-extrabold text-white">
                       {targetProfile?.name}
                     </h2>
-                    <span className="inline-flex rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-400 border border-violet-500/10 capitalize">
-                      {targetProfile?.role}
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold border capitalize ${
+                      (targetProfile?.role || "employee") === "admin"
+                        ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
+                        : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    }`}>
+                      {targetProfile?.role || "employee"}
                     </span>
+                    {targetProfile?.employeeId && (
+                      <span className="inline-flex rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-bold text-violet-300 border border-violet-500/20">
+                        {targetProfile.employeeId}
+                      </span>
+                    )}
                   </div>
                   <p className="text-slate-350 text-xs md:text-sm font-medium flex items-center gap-1.5">
                     <Building className="h-3.5 w-3.5 text-slate-500" />
-                    {targetProfile?.position || "Position Unset"} &bull; {targetProfile?.department}
+                    {(targetProfile?.jobDetails?.position || targetProfile?.position || "Position Unset")} &bull; {(targetProfile?.jobDetails?.department || targetProfile?.department)}
                   </p>
                 </div>
               </div>
@@ -390,8 +407,8 @@ export const Profile = () => {
                   <input
                     type="text"
                     disabled={true}
-                    value={targetProfile.id}
-                    className="w-full rounded-xl border border-slate-850 bg-slate-900/20 py-2.5 px-3.5 text-sm text-slate-400 opacity-60 cursor-not-allowed"
+                    value={targetProfile.employeeId || generateCustomEmployeeId(targetProfile.name, targetProfile.joinDate || targetProfile.joinedDate || targetProfile.createdAt || '2024-01-01', employees.findIndex(e => e.id === targetProfile.id) !== -1 ? employees.findIndex(e => e.id === targetProfile.id) + 1 : 1)}
+                    className="w-full rounded-xl border border-slate-850 bg-slate-900/20 py-2.5 px-3.5 text-sm text-slate-400 opacity-60 cursor-not-allowed font-mono font-bold"
                   />
                 </div>
 
@@ -471,17 +488,18 @@ export const Profile = () => {
                 {/* Base Salary */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-355 flex items-center gap-1.5">
-                    <span>Base Salary (USD / Annual)</span>
+                    <span>Base Salary (INR / LPA)</span>
                     {isFieldReadOnly("financial", "salary") && <Lock className="h-3 w-3 text-slate-500 shrink-0" />}
                   </label>
                   <div className="relative">
-                    <span className="absolute top-2.5 left-3 text-sm text-slate-500 font-semibold">$</span>
+                    <span className="absolute top-2.5 left-3 text-sm text-slate-500 font-semibold">₹</span>
                     <input
                       type="number"
+                      step="0.01"
                       disabled={isFieldReadOnly("financial", "salary")}
                       value={formData.salary}
                       onChange={(e) => handleInputChange("salary", e.target.value)}
-                      placeholder="95000"
+                      placeholder="e.g. 18.5"
                       className={`w-full rounded-xl border border-slate-800 bg-slate-950/40 py-2.5 pl-7 pr-3.5 text-sm text-white focus:border-violet-500 ${
                         isFieldReadOnly("financial", "salary") ? "opacity-60 cursor-not-allowed bg-slate-900/20" : ""
                       }`}

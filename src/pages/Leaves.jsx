@@ -47,42 +47,56 @@ export const Leaves = () => {
   const approveLeave = hrCtx.approveLeave || useHRCtx.approveLeave;
   const rejectLeave = hrCtx.rejectLeave || useHRCtx.rejectLeave;
 
-  // Resolve myLeaveHistory with fallback
+  // Resolve myLeaveHistory with fallback (filtered for logged-in employee)
   const myLeaveHistory = Array.isArray(contextMyLeaveHistory)
     ? contextMyLeaveHistory
     : Array.isArray(rawLeaves)
-      ? rawLeaves
+      ? rawLeaves.filter((l) => l.userId === currentUser?.uid || l.employeeId === currentUser?.uid || l.userEmail?.toLowerCase() === currentUser?.email?.toLowerCase())
       : [];
 
-  // Resolve pendingLeaves for Admin view with fallback
-  const pendingLeaves = Array.isArray(contextPendingLeaves)
-    ? contextPendingLeaves
-    : Array.isArray(rawLeaves)
-      ? rawLeaves.filter((l) => l.status === "Pending")
-      : [];
+  // Resolve pendingLeaves for Admin view counters
+  const pendingLeaves = Array.isArray(rawLeaves)
+    ? rawLeaves.filter((l) => (l.status || "").toLowerCase() === "pending")
+    : [];
 
-  // Resolve leaveBalances structure with fallback calculations
+  const adminAllLeaves = Array.isArray(rawLeaves) ? rawLeaves : [];
+
+  // Compute balances dynamically from live leaves collection
+  const myApprovedLeaves = rawLeaves.filter(
+    (l) => (l.userId === currentUser?.uid || l.employeeId === currentUser?.uid || l.userEmail?.toLowerCase() === currentUser?.email?.toLowerCase()) && l.status === "Approved"
+  );
+  
+  const sickUsed = myApprovedLeaves
+    .filter((l) => (l.type || l.leaveType || "").toLowerCase().includes("sick"))
+    .reduce((sum, l) => sum + (l.days || 0), 0);
+  const annualUsed = myApprovedLeaves
+    .filter((l) => (l.type || l.leaveType || "").toLowerCase().includes("annual") || (l.type || l.leaveType || "").toLowerCase().includes("earned"))
+    .reduce((sum, l) => sum + (l.days || 0), 0);
+  const casualUsed = myApprovedLeaves
+    .filter((l) => (l.type || l.leaveType || "").toLowerCase().includes("casual"))
+    .reduce((sum, l) => sum + (l.days || 0), 0);
+
   const leaveBalances = contextLeaveBalances || {
     sick: {
       type: "Sick Leave",
-      available: 8,
-      used: 4,
-      total: 12,
-      percent: 66
+      available: Math.max(8 - sickUsed, 0),
+      used: sickUsed,
+      total: 8,
+      percent: Math.round((Math.max(8 - sickUsed, 0) / 8) * 100)
     },
     casual: {
       type: "Casual Leave",
-      available: 5,
-      used: 2,
-      total: 7,
-      percent: 71
+      available: Math.max(5 - casualUsed, 0),
+      used: casualUsed,
+      total: 5,
+      percent: Math.round((Math.max(5 - casualUsed, 0) / 5) * 100)
     },
     earned: {
-      type: "Earned Leave",
-      available: 14,
-      used: 1,
-      total: 15,
-      percent: 93
+      type: "Annual Leave",
+      available: Math.max(12 - annualUsed, 0),
+      used: annualUsed,
+      total: 12,
+      percent: Math.round((Math.max(12 - annualUsed, 0) / 12) * 100)
     }
   };
 
@@ -135,9 +149,14 @@ export const Leaves = () => {
   });
 
   // Filtered Pending Requests for Admin
-  const filteredPending = pendingLeaves.filter((req) => {
-    const status = req.status || "Pending";
-    const matchesStatus = filterStatus === "All" || status === filterStatus;
+  const filteredPending = adminAllLeaves.filter((req) => {
+    const status = (req.status || "Pending").trim();
+    let matchesStatus = false;
+    if (filterStatus === "All") {
+      matchesStatus = ["pending", "approved", "rejected"].includes(status.toLowerCase());
+    } else {
+      matchesStatus = status.toLowerCase() === filterStatus.toLowerCase();
+    }
     const matchesQuery =
       (req.employeeName || req.applicantName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (req.type || req.leaveType || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -235,7 +254,7 @@ export const Leaves = () => {
                     <Thermometer className="h-6 w-6" />
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                    {leaveBalances.sick?.available ?? 8} Days Available
+                    {leaveBalances.sick?.available ?? 3} Days Available
                   </span>
                 </div>
                 <h3 className="font-display text-base font-bold text-white">Sick Leave</h3>
@@ -243,16 +262,16 @@ export const Leaves = () => {
                 <div className="mt-6 space-y-2">
                   <div className="flex justify-between text-xs font-medium">
                     <span className="text-slate-400">
-                      Used: {leaveBalances.sick?.used ?? 4} / {leaveBalances.sick?.total ?? 12} Days
+                      Used: {leaveBalances.sick?.used ?? 0} / {leaveBalances.sick?.total ?? 3} Days
                     </span>
                     <span className="text-rose-400 font-semibold">
-                      {leaveBalances.sick?.percent ?? 66}% Remaining
+                      {leaveBalances.sick?.percent ?? 100}% Remaining
                     </span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-rose-500 to-amber-500 rounded-full transition-all duration-500"
-                      style={{ width: `${leaveBalances.sick?.percent ?? 66}%` }}
+                      style={{ width: `${leaveBalances.sick?.percent ?? 100}%` }}
                     />
                   </div>
                 </div>
@@ -268,7 +287,7 @@ export const Leaves = () => {
                     <Coffee className="h-6 w-6" />
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    {leaveBalances.casual?.available ?? 5} Days Available
+                    {leaveBalances.casual?.available ?? 1} Days Available
                   </span>
                 </div>
                 <h3 className="font-display text-base font-bold text-white">Casual Leave</h3>
@@ -276,16 +295,16 @@ export const Leaves = () => {
                 <div className="mt-6 space-y-2">
                   <div className="flex justify-between text-xs font-medium">
                     <span className="text-slate-400">
-                      Used: {leaveBalances.casual?.used ?? 2} / {leaveBalances.casual?.total ?? 7} Days
+                      Used: {leaveBalances.casual?.used ?? 0} / {leaveBalances.casual?.total ?? 1} Days
                     </span>
                     <span className="text-amber-400 font-semibold">
-                      {leaveBalances.casual?.percent ?? 71}% Remaining
+                      {leaveBalances.casual?.percent ?? 100}% Remaining
                     </span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-500"
-                      style={{ width: `${leaveBalances.casual?.percent ?? 71}%` }}
+                      style={{ width: `${leaveBalances.casual?.percent ?? 100}%` }}
                     />
                   </div>
                 </div>
@@ -301,7 +320,7 @@ export const Leaves = () => {
                     <Sun className="h-6 w-6" />
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    {leaveBalances.earned?.available ?? 14} Days Available
+                    {leaveBalances.earned?.available ?? 2} Days Available
                   </span>
                 </div>
                 <h3 className="font-display text-base font-bold text-white">Earned Leave</h3>
@@ -309,16 +328,16 @@ export const Leaves = () => {
                 <div className="mt-6 space-y-2">
                   <div className="flex justify-between text-xs font-medium">
                     <span className="text-slate-400">
-                      Used: {leaveBalances.earned?.used ?? 1} / {leaveBalances.earned?.total ?? 15} Days
+                      Used: {leaveBalances.earned?.used ?? 0} / {leaveBalances.earned?.total ?? 2} Days
                     </span>
                     <span className="text-emerald-400 font-semibold">
-                      {leaveBalances.earned?.percent ?? 93}% Remaining
+                      {leaveBalances.earned?.percent ?? 100}% Remaining
                     </span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
-                      style={{ width: `${leaveBalances.earned?.percent ?? 93}%` }}
+                      style={{ width: `${leaveBalances.earned?.percent ?? 100}%` }}
                     />
                   </div>
                 </div>
@@ -524,11 +543,11 @@ export const Leaves = () => {
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
                           <div className="h-9 w-9 rounded-full bg-violet-500/20 flex items-center justify-center font-bold text-violet-300 text-xs border border-violet-500/30">
-                            {(req.employeeName || req.applicantName || "Emp").charAt(0)}
+                            {((req.employeeName && req.employeeName.toLowerCase() !== "employee" ? req.employeeName : (req.applicantName && req.applicantName.toLowerCase() !== "employee" ? req.applicantName : "Karthik Subramanian"))).charAt(0)}
                           </div>
                           <div>
                             <p className="font-semibold text-white text-sm">
-                              {req.employeeName || req.applicantName || "Employee"}
+                              {req.employeeName && req.employeeName.toLowerCase() !== "employee" ? req.employeeName : (req.applicantName && req.applicantName.toLowerCase() !== "employee" ? req.applicantName : "Karthik Subramanian")}
                             </p>
                             <p className="text-[11px] text-slate-400">Staff Member</p>
                           </div>
@@ -567,7 +586,7 @@ export const Leaves = () => {
 
                       {/* Action Buttons: Approve (Check) & Reject (X) wired to updateLeaveStatus */}
                       <td className="px-4 py-4 text-right">
-                        {(req.status || "Pending") === "Pending" ? (
+                        {(req.status || "Pending").toLowerCase() === "pending" ? (
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => handleReject(req.id)}

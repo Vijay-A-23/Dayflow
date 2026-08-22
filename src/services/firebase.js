@@ -23,17 +23,12 @@ let app;
 let auth;
 let db;
 
-if (isFirebaseConfigured) {
-  try {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    auth = getAuth(app);
-    db = getFirestore(app);
-    console.log("Firebase initialized successfully.");
-  } catch (error) {
-    console.error("Firebase initialization failed:", error);
-  }
-} else {
-  console.log("Firebase environment variables not found. Running in Mock Mode.");
+try {
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (error) {
+  console.error("Firebase initialization failed:", error);
 }
 
 export { auth, db, isFirebaseConfigured };

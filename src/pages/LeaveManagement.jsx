@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useHR } from "../context/HRContext";
 import { useAuth } from "../context/AuthContext";
-import { LEAVE_TYPES } from "../constants/mockData";
+const LEAVE_TYPES = ["Sick", "Casual", "Annual"];
 import { Calendar, FileText, Check, X, AlertCircle, Hourglass, Plus, ChevronRight } from "lucide-react";
 
 export const LeaveManagement = () => {

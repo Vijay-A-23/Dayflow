@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import { profileService } from "../services/profileService";
 import { leaveService } from "../services/leaveService";
 import { attendanceService } from "../services/attendanceService";
 import { useAuth } from "./AuthContext";
+import { db } from "../services/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
+import { seedDatabase } from "../services/dbSeeder";
 
 const HRContext = createContext(null);
 
@@ -15,60 +18,98 @@ export const useHR = () => {
 };
 
 export const HRProvider = ({ children }) => {
-  const { currentUser, userRole, updateProfileDetails } = useAuth();
+  const { currentUser, userRole, userProfile, updateProfileDetails } = useAuth();
   
   const [employees, setEmployees] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Load all data (role-based)
-  const refreshData = useCallback(async () => {
-    if (!currentUser) return;
-    setLoading(true);
-    try {
-      if (userRole === "admin") {
-        // Admins see everything
-        const [empList, leaveList, attList] = await Promise.all([
-          profileService.getEmployees(),
-          leaveService.getAllLeaves(),
-          attendanceService.getAllPunches()
-        ]);
-        setEmployees(empList);
-        setLeaves(leaveList);
-        setAttendance(attList);
-      } else {
-        // Employees see their own items plus employee list (for display/profile checks)
-        const [leaveList, attList] = await Promise.all([
-          leaveService.getLeaves(currentUser.uid),
-          attendanceService.getPunches(currentUser.uid)
-        ]);
-        setLeaves(leaveList);
-        setAttendance(attList);
+  useEffect(() => {
+    const checkAndSeed = async () => {
+      try {
+        const { getDocs, collection: getFirestoreCollection } = await import("firebase/firestore");
+        const { db: firestoreDb } = await import("../services/firebase");
+        const snap = await getDocs(getFirestoreCollection(firestoreDb, "users"));
+        const hasOldSeed = snap.docs.some(d => d.id === "sarah_uid" || d.id === "david_uid" || d.id === "priya_uid" || d.id === "employee_uid" || d.data().name === "Sarah Jenkins" || d.data().name === "Alex Morgan");
+        if (snap.empty || hasOldSeed) {
+          console.log("Forcing fresh database seed for Indian staff roster...");
+          await seedDatabase(true);
+        }
+      } catch (err) {
+        console.error("Startup seeding check failed:", err);
       }
-    } catch (error) {
-      console.error("Error refreshing HR data:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentUser, userRole]);
+    };
+    checkAndSeed();
+  }, []);
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    if (!currentUser) {
+      setEmployees([]);
+      setLeaves([]);
+      setAttendance([]);
+      return;
+    }
+
+    setLoading(true);
+
+    // 1. Live Employees Sync
+    const unsubscribeEmployees = onSnapshot(collection(db, "users"), (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      setEmployees(list);
+      setLoading(false);
+    }, (err) => {
+      console.error("Employees sync failed:", err);
+      setLoading(false);
+    });
+
+    // 2. Live Leaves Sync
+    const unsubscribeLeaves = onSnapshot(collection(db, "leaves"), (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      list.sort((a, b) => (b.appliedDate || "").localeCompare(a.appliedDate || ""));
+      setLeaves(list);
+    }, (err) => {
+      console.error("Leaves sync failed:", err);
+    });
+
+    // 3. Live Attendance Sync
+    const unsubscribeAttendance = onSnapshot(collection(db, "attendance"), (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      list.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+      setAttendance(list);
+    }, (err) => {
+      console.error("Attendance sync failed:", err);
+    });
+
+    return () => {
+      unsubscribeEmployees();
+      unsubscribeLeaves();
+      unsubscribeAttendance();
+    };
+  }, [currentUser]);
 
   // Submit a leave request
   const applyLeave = async (request) => {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const newLeave = await leaveService.applyLeave(
+      return await leaveService.applyLeave(
         currentUser.uid, 
-        currentUser.displayName || "Employee", 
-        request
+        userProfile?.name || currentUser.displayName || ((userProfile?.role || userRole) === "admin" ? "Kavitha Sundaram" : "Karthik Subramanian"), 
+        {
+          ...request,
+          userEmail: currentUser.email || ""
+        }
       );
-      setLeaves(prev => [newLeave, ...prev]);
-      return newLeave;
     } catch (error) {
       console.error("Error applying leave:", error);
       throw error;
@@ -82,9 +123,7 @@ export const HRProvider = ({ children }) => {
     if (userRole !== "admin") return;
     setLoading(true);
     try {
-      const updated = await leaveService.updateLeaveStatus(leaveId, "Approved");
-      setLeaves(prev => prev.map(l => l.id === leaveId ? { ...l, status: "Approved" } : l));
-      return updated;
+      return await leaveService.updateLeaveStatus(leaveId, "Approved");
     } catch (error) {
       console.error("Error approving leave:", error);
       throw error;
@@ -97,9 +136,7 @@ export const HRProvider = ({ children }) => {
     if (userRole !== "admin") return;
     setLoading(true);
     try {
-      const updated = await leaveService.updateLeaveStatus(leaveId, "Rejected");
-      setLeaves(prev => prev.map(l => l.id === leaveId ? { ...l, status: "Rejected" } : l));
-      return updated;
+      return await leaveService.updateLeaveStatus(leaveId, "Rejected");
     } catch (error) {
       console.error("Error rejecting leave:", error);
       throw error;
@@ -113,9 +150,7 @@ export const HRProvider = ({ children }) => {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const record = await attendanceService.punchIn(currentUser.uid);
-      setAttendance(prev => [record, ...prev]);
-      return record;
+      return await attendanceService.punchIn(currentUser.uid, userProfile?.name || currentUser.displayName || ((userProfile?.role || userRole) === "admin" ? "Kavitha Sundaram" : "Karthik Subramanian"));
     } catch (error) {
       console.error("Punch In failed:", error);
       throw error;
@@ -128,9 +163,7 @@ export const HRProvider = ({ children }) => {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const record = await attendanceService.punchOut(currentUser.uid, recordId);
-      setAttendance(prev => prev.map(r => r.id === recordId ? record : r));
-      return record;
+      return await attendanceService.punchOut(currentUser.uid, recordId);
     } catch (error) {
       console.error("Punch Out failed:", error);
       throw error;
@@ -144,28 +177,7 @@ export const HRProvider = ({ children }) => {
     if (userRole !== "admin") return;
     setLoading(true);
     try {
-      // For mock simplicity, we can auto-register user via Auth (mock)
-      const mockEmail = employeeData.email;
-      const mockPassword = mockEmail.split("@")[0] + "123";
-      
-      // Call auth signup directly to register them in list
-      const result = await authService.signup(
-        mockEmail,
-        mockPassword,
-        employeeData.name,
-        employeeData.role || "employee",
-        employeeData.department || "Engineering"
-      );
-
-      // Now set details like phone and position in profile
-      const updatedProfile = await profileService.updateProfile(result.profile.id, {
-        position: employeeData.position || "Staff Engineer",
-        phone: employeeData.phone || "",
-        status: employeeData.status || "Active",
-      });
-
-      setEmployees(prev => [...prev.filter(e => e.id !== updatedProfile.id), updatedProfile]);
-      return updatedProfile;
+      return await profileService.addEmployee(employeeData);
     } catch (error) {
       console.error("Error adding employee:", error);
       throw error;
@@ -179,8 +191,7 @@ export const HRProvider = ({ children }) => {
     if (userRole !== "admin") return;
     setLoading(true);
     try {
-      await profileService.deleteEmployee(employeeId);
-      setEmployees(prev => prev.filter(e => e.id !== employeeId));
+      return await profileService.deleteEmployee(employeeId);
     } catch (error) {
       console.error("Error deleting employee:", error);
       throw error;
@@ -194,19 +205,28 @@ export const HRProvider = ({ children }) => {
     if (userRole !== "admin" && id !== currentUser?.uid) return;
     setLoading(true);
     try {
-      let updated;
       if (id === currentUser?.uid) {
-        // Update self via AuthContext
-        updated = await updateProfileDetails(updatedData);
+        return await updateProfileDetails(updatedData);
       } else {
-        // Admin updating someone else
-        updated = await profileService.updateProfile(id, updatedData);
+        return await profileService.updateProfile(id, updatedData);
       }
-      // Update local list
-      setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updatedData } : e));
-      return updated;
     } catch (error) {
       console.error("Error updating employee profile:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Seed demo data (Admin only)
+  const seedDemoData = async () => {
+    if (userRole !== "admin") return;
+    setLoading(true);
+    try {
+      await seedDatabase(true);
+      console.log("Firestore successfully seeded.");
+    } catch (error) {
+      console.error("Database seeding failed:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -219,7 +239,6 @@ export const HRProvider = ({ children }) => {
       leaves,
       attendance,
       loading,
-      refreshData,
       applyLeave,
       approveLeave,
       rejectLeave,
@@ -227,9 +246,12 @@ export const HRProvider = ({ children }) => {
       punchOut,
       addEmployee,
       deleteEmployee,
-      updateEmployee
+      updateEmployee,
+      seedDemoData
     }}>
       {children}
     </HRContext.Provider>
   );
 };
+
+export default HRContext;

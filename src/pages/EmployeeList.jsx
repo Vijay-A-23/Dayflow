@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useHR } from "../context/HRContext";
+import { generateCustomEmployeeId, getFormattedEmployeeId, formatLakhsToSalaryStr } from "../utils/employeeIdGenerator";
 import { 
   Search, 
   Filter, 
@@ -18,7 +19,8 @@ import {
   Briefcase,
   DollarSign,
   Calendar,
-  Building
+  Building,
+  AlertCircle
 } from "lucide-react";
 
 export const EmployeeList = () => {
@@ -73,13 +75,15 @@ export const EmployeeList = () => {
 
     setFormError("");
     try {
+      const generatedId = generateCustomEmployeeId(name.trim(), new Date().getFullYear(), employees.length + 1);
       await addEmployee({
         name: name.trim(),
         email: email.trim(),
+        employeeId: generatedId,
         department,
         position: position.trim(),
         phone: phone.trim(),
-        salary: salary.trim(),
+        salary: formatLakhsToSalaryStr(salary.trim()),
         role,
         status
       });
@@ -112,14 +116,32 @@ export const EmployeeList = () => {
   // Filter and search computation
   const filteredEmployees = employees.filter((emp) => {
     const matchesSearch = 
-      emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.position.toLowerCase().includes(searchTerm.toLowerCase());
+      emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.position?.toLowerCase().includes(searchTerm.toLowerCase());
       
     const matchesDept = selectedDept === "All" || emp.department === selectedDept;
     
     return matchesSearch && matchesDept;
   });
+
+  // Deduplicate by email
+  const seenEmails = new Set();
+  const uniqueEmployees = filteredEmployees.filter((emp) => {
+    const emailLower = (emp.email || "").toLowerCase().trim();
+    if (!emailLower) return true;
+    if (seenEmails.has(emailLower)) return false;
+    seenEmails.add(emailLower);
+    return true;
+  });
+
+  // Total unique employees count
+  const allUniqueEmails = new Set();
+  employees.forEach(emp => {
+    const emailLower = (emp.email || "").toLowerCase().trim();
+    if (emailLower) allUniqueEmails.add(emailLower);
+  });
+  const totalUniqueCount = allUniqueEmails.size || employees.length;
 
   return (
     <div className="relative min-h-screen space-y-6 p-6 max-w-7xl mx-auto">
@@ -140,7 +162,7 @@ export const EmployeeList = () => {
             <p className="text-slate-400 text-sm mt-1">Audit permissions, update active roster profiles, and onboard recruits.</p>
           </div>
           <span className="inline-flex items-center rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300 border border-slate-700/50">
-            {employees.length} Total
+            {totalUniqueCount} Total
           </span>
         </div>
 
@@ -219,7 +241,7 @@ export const EmployeeList = () => {
       {/* Grid Card View */}
       {viewMode === "grid" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEmployees.map((emp) => (
+          {uniqueEmployees.map((emp, index) => (
             <div key={emp.id} className="glass-card rounded-2xl p-5 border border-slate-800/60 flex flex-col justify-between hover:border-slate-700/60 transition-all group">
               <div className="space-y-4">
                 
@@ -227,20 +249,21 @@ export const EmployeeList = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <img
-                      src={emp.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"}
+                      src={emp.avatar || emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"}
                       alt={emp.name}
                       className="h-12 w-12 rounded-full object-cover ring-2 ring-violet-500/25 transition-transform group-hover:scale-105"
                     />
-                    <div className="truncate">
+                    <div className="truncate text-left">
                       <h3 className="font-semibold text-white truncate text-base">{emp.name}</h3>
-                      <p className="text-xs text-violet-400 truncate font-medium">{emp.position}</p>
+                      <p className="text-xs text-violet-400 truncate font-semibold">{emp.position || emp.jobDetails?.position || "Staff Member"}</p>
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{emp.department || emp.jobDetails?.department || "Engineering"}</p>
                     </div>
                   </div>
 
                   {/* Delete button (Admin Action) */}
                   <button
                     onClick={() => handleDelete(emp.id, emp.name)}
-                    className="text-slate-500 hover:text-rose-400 p-1 rounded-lg hover:bg-slate-800 transition-all"
+                    className="text-slate-500 hover:text-rose-400 p-1 rounded-lg hover:bg-slate-800 transition-all shrink-0"
                     title="Remove Employee"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -249,8 +272,8 @@ export const EmployeeList = () => {
 
                 {/* Tags and badges */}
                 <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex rounded-full bg-violet-500/10 px-2.5 py-0.5 text-xs font-semibold text-violet-400 border border-violet-500/10">
-                    {emp.department}
+                  <span className="inline-flex rounded-full bg-slate-950/65 px-2.5 py-0.5 text-xs font-mono font-bold text-violet-300 border border-violet-500/20">
+                    {getFormattedEmployeeId(emp, index + 1)}
                   </span>
                   <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold border ${
                     emp.status === "Active" 
@@ -268,23 +291,22 @@ export const EmployeeList = () => {
                 <div className="border-t border-slate-800/60 my-1" />
 
                 {/* Contact data list */}
-                <div className="space-y-2 text-xs text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-3.5 w-3.5 text-slate-500" />
+                <div className="space-y-2.5 text-xs text-slate-350">
+                  <div className="flex items-center gap-2.5">
+                    <Mail className="h-3.5 w-3.5 text-slate-500 shrink-0" />
                     <span className="truncate">{emp.email}</span>
                   </div>
-                  {emp.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-3.5 w-3.5 text-slate-500" />
-                      <span>{emp.phone}</span>
-                    </div>
-                  )}
-                  {emp.joinDate && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-3.5 w-3.5 text-slate-500" />
-                      <span>Joined: {emp.joinDate}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2.5">
+                    <Phone className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <span>{emp.personalDetails?.phone || emp.phone || '+91 98401 23456'}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Calendar className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <span>Joined: {(() => {
+                      const rawDate = emp.joinDate || emp.joinedDate || emp.createdAt || '2024-01-15';
+                      return rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                    })()}</span>
+                  </div>
                 </div>
               </div>
 
@@ -320,20 +342,21 @@ export const EmployeeList = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredEmployees.map((emp) => (
+                {uniqueEmployees.map((emp, index) => (
                   <tr key={emp.id} className="hover:bg-slate-800/20 transition-all group">
                     
                     {/* Identity cell */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <img
-                          src={emp.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100"}
+                          src={emp.avatar || emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100"}
                           alt=""
                           className="h-10 w-10 rounded-full object-cover"
                         />
                         <div>
                           <span className="font-semibold text-white block">{emp.name}</span>
-                          <span className="text-xs text-slate-400">{emp.position}</span>
+                          <span className="text-xs text-slate-400 block">{emp.position || emp.jobDetails?.position || "Staff Member"}</span>
+                          <span className="text-[10px] text-slate-505 block mt-0.5">{emp.department || emp.jobDetails?.department || "Engineering"}</span>
                         </div>
                       </div>
                     </td>
@@ -341,26 +364,37 @@ export const EmployeeList = () => {
                     {/* Department cell */}
                     <td className="px-6 py-4">
                       <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-xs font-semibold text-violet-400 border border-violet-500/10">
-                        {emp.department}
+                        {emp.department || emp.jobDetails?.department || "Engineering"}
                       </span>
                     </td>
 
                     {/* Role cell */}
                     <td className="px-6 py-4 text-xs font-medium text-slate-400 capitalize">
-                      {emp.role}
+                      <div className="space-y-1">
+                        <span className="block">{emp.role}</span>
+                        <span className="inline-block rounded-md bg-slate-950/65 px-1.5 py-0.5 font-mono text-[9px] font-bold text-violet-300 border border-violet-500/10">
+                          {getFormattedEmployeeId(emp, index + 1)}
+                        </span>
+                      </div>
                     </td>
 
                     {/* Contact info cell */}
                     <td className="px-6 py-4 text-xs">
-                      <div className="space-y-1 text-slate-400">
-                        <p className="flex items-center gap-1.5"><Mail className="h-3 w-3" /> {emp.email}</p>
-                        {emp.phone && <p className="flex items-center gap-1.5"><Phone className="h-3 w-3" /> {emp.phone}</p>}
+                      <div className="space-y-1.5 text-slate-400">
+                        <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-500 shrink-0" /> {emp.email}</p>
+                        <p className="flex items-center gap-1.5">
+                          <Phone className="h-3.5 w-3.5 text-slate-500 shrink-0" /> 
+                          {emp.personalDetails?.phone || emp.phone || '+91 98401 23456'}
+                        </p>
                       </div>
                     </td>
 
                     {/* Date cell */}
                     <td className="px-6 py-4 text-xs font-medium text-slate-400">
-                      {emp.joinDate || "N/A"}
+                      {(() => {
+                        const rawDate = emp.joinDate || emp.joinedDate || emp.createdAt || '2024-01-15';
+                        return rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                      })()}
                     </td>
 
                     {/* Status cell */}
@@ -403,7 +437,7 @@ export const EmployeeList = () => {
       )}
 
       {/* Fallback empty view */}
-      {filteredEmployees.length === 0 && (
+      {uniqueEmployees.length === 0 && (
         <div className="py-20 text-center glass-panel rounded-2xl border border-slate-800">
           <p className="text-slate-500 text-sm">No employee matches your current search criteria.</p>
         </div>
@@ -524,15 +558,16 @@ export const EmployeeList = () => {
 
                 {/* Salary input */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Annual Salary (USD)</label>
+                  <label className="text-xs font-semibold text-slate-300">Annual Salary (INR / LPA)</label>
                   <div className="relative">
-                    <span className="absolute top-3 left-3 text-sm text-slate-500 font-semibold">$</span>
+                    <span className="absolute top-3 left-3 text-sm text-slate-500 font-semibold">₹</span>
                     <input
                       type="number"
+                      step="0.01"
                       required
                       value={salary}
                       onChange={(e) => setSalary(e.target.value)}
-                      placeholder="95000"
+                      placeholder="e.g. 18.5"
                       className="w-full rounded-xl border border-slate-800 bg-slate-950 py-2.5 pl-7 pr-3.5 text-sm text-white focus:border-violet-500"
                     />
                   </div>

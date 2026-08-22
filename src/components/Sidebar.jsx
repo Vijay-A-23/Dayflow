@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 export const Sidebar = ({ isOpen, onClose }) => {
-  const { userRole, switchRole, logout } = useAuth();
+  const { userRole, logout } = useAuth();
   const navigate = useNavigate();
 
   const links = [
@@ -39,10 +39,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     navigate("/login", { replace: true });
   };
 
-  const handleMobileRoleSwitch = () => {
-    const nextRole = userRole === "admin" ? "employee" : "admin";
-    if (switchRole) switchRole(nextRole);
-  };
+  // Mobile role switch removed for production
 
   return (
     <>
@@ -56,9 +53,9 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 flex w-64 flex-col border-r border-slate-800 bg-slate-900 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-800 bg-slate-900 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:sticky lg:top-0 lg:h-[calc(100vh-4rem)]`}
+        }`}
       >
         {/* Mobile Header Inside Sidebar */}
         <div className="flex h-16 items-center justify-between px-6 lg:hidden border-b border-slate-800">
@@ -93,17 +90,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
         {/* Mobile Role Switch & Logout (Visible only on mobile inside drawer) */}
         <div className="lg:hidden px-4 pb-3 space-y-2">
-          <button
-            onClick={handleMobileRoleSwitch}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs font-medium text-slate-300 hover:bg-slate-800"
-          >
-            <div className="flex items-center gap-2">
-              <Shield className="h-3.5 w-3.5 text-violet-400" />
-              <span className="capitalize">Role: {userRole || "employee"}</span>
-            </div>
-            <ArrowLeftRight className="h-3 w-3 text-slate-500" />
-          </button>
-
           <button
             onClick={handleMobileLogout}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-semibold text-rose-400 hover:bg-rose-500/20"

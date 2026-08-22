@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { auth, isFirebaseConfigured, db } from "../services/firebase";
+import { auth, db, isFirebaseConfigured } from '../services/firebase';
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, setDoc } from "firebase/firestore";
 import { authService } from "../services/authService";
 import { profileService } from "../services/profileService";
-import { DEMO_USERS, INITIAL_EMPLOYEES } from "../constants/mockData";
 
 export const AUTH_STORAGE_KEY = "dayflow_auth_user";
 const LEGACY_STORAGE_KEY = "df_current_user";
@@ -33,7 +32,7 @@ const getStoredSession = () => {
     const user = parsed.user || (profile ? {
       uid: profile.id || profile.uid,
       email: profile.email,
-      displayName: profile.name || profile.displayName || profile.email?.split("@")[0],
+      displayName: profile.name || profile.displayName || (profile.email?.toLowerCase() === "employee@dayflow.com" ? "Karthik Subramanian" : (profile.email?.toLowerCase() === "admin@dayflow.com" ? "Kavitha Sundaram" : profile.email?.split("@")[0])),
       role: profile.role || parsed.role || "employee"
     } : null);
 
@@ -77,26 +76,222 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const docRef = doc(db, "users", firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
-          
-          let role = "employee";
+          let docSnap = await getDoc(doc(db, "users", firebaseUser.uid));
           let profile = null;
 
           if (docSnap.exists()) {
             profile = docSnap.data();
-            role = profile.role || "employee";
           } else {
-            profile = {
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || firebaseUser.email.split("@")[0],
-              email: firebaseUser.email,
-              role: "employee",
-              department: "Engineering",
-              status: "Active",
-              avatar: firebaseUser.photoURL || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`
+            // Fallback: Query by email to link manual/seeded database records to auth login uids
+            const q = query(collection(db, "users"), where("email", "==", firebaseUser.email));
+            const querySnap = await getDocs(q);
+            if (!querySnap.empty) {
+              const docDoc = querySnap.docs[0];
+              profile = { ...docDoc.data(), id: firebaseUser.uid, uid: firebaseUser.uid };
+              // Create the document under actual UID path for future direct gets
+              await setDoc(doc(db, "users", firebaseUser.uid), profile);
+            }
+          }
+
+          if (profile) {
+            // Verify and enforce profile properties for specific demo accounts
+            if (firebaseUser.email === "admin@dayflow.com") {
+              const avatarUrl = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80";
+              let updated = false;
+              if (profile.name !== "Kavitha Sundaram") {
+                profile.name = "Kavitha Sundaram";
+                updated = true;
+              }
+              if (profile.employeeId !== "OIKASU20230001") {
+                profile.employeeId = "OIKASU20230001";
+                profile.joinDate = "2023-06-15";
+                updated = true;
+              }
+              if (profile.avatar !== avatarUrl || profile.avatarUrl !== avatarUrl) {
+                profile.avatar = avatarUrl;
+                profile.avatarUrl = avatarUrl;
+                updated = true;
+              }
+              if (profile.jobDetails?.position !== "Head of People & Operations" || profile.jobDetails?.workLocation !== "Chennai HQ - OMR") {
+                profile.jobDetails = {
+                  department: "Human Resources",
+                  position: "Head of People & Operations",
+                  manager: "Executive Board",
+                  employmentType: "Full-Time",
+                  workLocation: "Chennai HQ - OMR"
+                };
+                profile.position = "Head of People & Operations";
+                updated = true;
+              }
+              if (updated) {
+                await setDoc(doc(db, "users", firebaseUser.uid), profile);
+              }
+            } else if (firebaseUser.email === "employee@dayflow.com") {
+              const avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80";
+              let updated = false;
+              if (profile.name !== "Karthik Subramanian") {
+                profile.name = "Karthik Subramanian";
+                updated = true;
+              }
+              if (profile.employeeId !== "OIKASU20240001") {
+                profile.employeeId = "OIKASU20240001";
+                profile.joinDate = "2024-02-15";
+                updated = true;
+              }
+              if (profile.avatar !== avatarUrl || profile.avatarUrl !== avatarUrl) {
+                profile.avatar = avatarUrl;
+                profile.avatarUrl = avatarUrl;
+                updated = true;
+              }
+              if (profile.jobDetails?.position !== "Senior Full Stack Engineer" || profile.jobDetails?.manager !== "Kavitha Sundaram") {
+                profile.jobDetails = {
+                  department: "Engineering",
+                  position: "Senior Full Stack Engineer",
+                  manager: "Kavitha Sundaram",
+                  employmentType: "Full-Time",
+                  workLocation: "Bengaluru Tech Hub (Hybrid)"
+                };
+                profile.position = "Senior Full Stack Engineer";
+                updated = true;
+              }
+              if (updated) {
+                await setDoc(doc(db, "users", firebaseUser.uid), profile);
+              }
+            }
+          } else {
+            // Profile does not exist yet. Only auto-create if it's Admin or the default Employee
+            if (firebaseUser.email === "admin@dayflow.com") {
+              const avatarUrl = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80";
+              profile = {
+                id: firebaseUser.uid,
+                uid: firebaseUser.uid,
+                name: "Kavitha Sundaram",
+                email: "admin@dayflow.com",
+                role: "admin",
+                status: "Active",
+                joinDate: "2023-06-15",
+                employeeId: "OIKASU20230001",
+                avatar: avatarUrl,
+                avatarUrl: avatarUrl,
+                jobDetails: {
+                  department: "Human Resources",
+                  position: "Head of People & Operations",
+                  manager: "Executive Board",
+                  employmentType: "Full-Time",
+                  workLocation: "Chennai HQ - OMR"
+                },
+                personalDetails: {
+                  personalEmail: "admin@dayflow.com",
+                  phone: "+91 98401 23456",
+                  emergencyContact: "+91 98401 00000",
+                  address: "OMR Road, Chennai",
+                  dob: "1988-04-12"
+                },
+                salaryDetails: {
+                  baseSalary: "₹24,50,000 / yr",
+                  bankName: "HDFC Bank",
+                  accountNumber: "****4821",
+                  taxId: "PAN-90218"
+                },
+                createdAt: new Date().toISOString()
+              };
+              await setDoc(doc(db, "users", firebaseUser.uid), profile);
+            } else if (firebaseUser.email === "employee@dayflow.com") {
+              const avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80";
+              profile = {
+                id: firebaseUser.uid,
+                uid: firebaseUser.uid,
+                name: "Karthik Subramanian",
+                email: "employee@dayflow.com",
+                role: "employee",
+                status: "Active",
+                joinDate: "2024-02-15",
+                employeeId: "OIKASU20240001",
+                avatar: avatarUrl,
+                avatarUrl: avatarUrl,
+                jobDetails: {
+                  department: "Engineering",
+                  position: "Senior Full Stack Engineer",
+                  manager: "Kavitha Sundaram",
+                  employmentType: "Full-Time",
+                  workLocation: "Bengaluru Tech Hub (Hybrid)"
+                },
+                personalDetails: {
+                  personalEmail: "employee@dayflow.com",
+                  phone: "+91 98840 55123",
+                  emergencyContact: "+91 98840 00000",
+                  address: "Indiranagar, Bengaluru",
+                  dob: "1995-08-20"
+                },
+                salaryDetails: {
+                  baseSalary: "₹18,50,000 / yr",
+                  bankName: "ICICI Bank",
+                  accountNumber: "****7192",
+                  taxId: "PAN-44821"
+                },
+                createdAt: new Date().toISOString()
+              };
+              await setDoc(doc(db, "users", firebaseUser.uid), profile);
+            } else {
+              profile = {
+                id: firebaseUser.uid,
+                uid: firebaseUser.uid,
+                name: firebaseUser.displayName && firebaseUser.displayName !== "employee" ? firebaseUser.displayName : firebaseUser.email.split("@")[0],
+                email: firebaseUser.email,
+                role: "employee",
+                status: "Active",
+                avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+                avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+                jobDetails: {
+                  department: "Engineering",
+                  position: "Staff Member",
+                  manager: "Sarah Jenkins",
+                  employmentType: "Full-time",
+                  workLocation: "Hybrid"
+                },
+                personalDetails: {
+                  personalEmail: firebaseUser.email,
+                  phone: "",
+                  emergencyContact: "",
+                  address: "",
+                  dob: ""
+                }
+              };
+            }
+          }
+
+          // Backfill nested properties if missing for backwards compatibility
+          if (!profile.jobDetails) {
+            profile.jobDetails = {
+              department: profile.department || "Engineering",
+              position: profile.position || "Staff Member",
+              manager: profile.manager || "",
+              employmentType: profile.employmentType || "Full-time",
+              workLocation: profile.workLocation || "HQ - Office"
             };
           }
+          if (!profile.personalDetails) {
+            profile.personalDetails = {
+              personalEmail: profile.personalEmail || profile.email || "",
+              phone: profile.phone || "",
+              emergencyContact: profile.emergencyContact || "",
+              address: profile.address || "",
+              dob: profile.dob || ""
+            };
+          }
+          
+          if (!profile.employeeId) {
+            const { generateCustomEmployeeId } = await import("../utils/employeeIdGenerator.js");
+            const { collection, getDocs } = await import("firebase/firestore");
+            const snap = await getDocs(collection(db, "users"));
+            const nextIdx = snap.empty ? 1 : snap.size + 1;
+            profile.employeeId = generateCustomEmployeeId(profile.name || profile.displayName || firebaseUser.email?.split("@")[0], profile.joinDate || profile.createdAt, nextIdx);
+            await setDoc(doc(db, "users", firebaseUser.uid), profile);
+          }
+
+          // Ensure role is strictly set from profile.role
+          let role = profile.role || (firebaseUser.email === "admin@dayflow.com" ? "admin" : "employee");
+          profile.role = role;
 
           const userObj = {
             uid: firebaseUser.uid,
@@ -117,7 +312,7 @@ export const AuthProvider = ({ children }) => {
           const fallbackUser = {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
-            displayName: firebaseUser.displayName || firebaseUser.email?.split("@")[0],
+            displayName: firebaseUser.displayName || (firebaseUser.email?.toLowerCase() === "employee@dayflow.com" ? "Karthik Subramanian" : (firebaseUser.email?.toLowerCase() === "admin@dayflow.com" ? "Kavitha Sundaram" : firebaseUser.email?.split("@")[0])),
             role: "employee"
           };
           setCurrentUser(fallbackUser);
@@ -142,12 +337,18 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const result = await authService.login(email, password);
-      
-      const role = result.profile?.role || result.user?.role || "employee";
+
+      let role = result.profile?.role || result.user?.role || "employee";
+      if (email.trim().toLowerCase() === "admin@dayflow.com") {
+        role = "admin";
+        if (result.profile) {
+          result.profile.role = "admin";
+        }
+      }
       const user = {
-        uid: result.user.uid || result.profile.id,
-        email: result.user.email || result.profile.email,
-        displayName: result.user.displayName || result.profile.name,
+        uid: result.user.uid || result.profile?.id,
+        email: result.user.email || result.profile?.email,
+        displayName: result.user.displayName || result.profile?.name,
         role: role
       };
       const profile = result.profile;
@@ -170,126 +371,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Quick Login as a pre-configured demo user (Admin or Employee)
-  const quickLogin = async (targetRole = "employee") => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const normalizedRole = targetRole.toLowerCase() === "admin" ? "admin" : "employee";
-      
-      // Fetch demo template from DEMO_USERS or INITIAL_EMPLOYEES
-      let demoUser = DEMO_USERS?.[normalizedRole];
-      if (!demoUser) {
-        demoUser = INITIAL_EMPLOYEES.find(e => e.role === normalizedRole) || {
-          id: normalizedRole === "admin" ? "emp-01" : "emp-02",
-          name: normalizedRole === "admin" ? "Eleanor Vance" : "Alex Morgan",
-          email: normalizedRole === "admin" ? "admin@dayflow.internal" : "alex.morgan@dayflow.internal",
-          role: normalizedRole,
-          department: normalizedRole === "admin" ? "Human Resources" : "Engineering",
-          position: normalizedRole === "admin" ? "HR Director" : "Senior Frontend Engineer",
-          status: "Active",
-          phone: normalizedRole === "admin" ? "+1 (555) 019-2834" : "+1 (555) 014-9988",
-          avatar: normalizedRole === "admin"
-            ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200"
-            : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200"
-        };
-      }
-
-      // Check if employee exists in localStorage df_employees
-      try {
-        const rawEmps = localStorage.getItem("df_employees");
-        let emps = rawEmps ? JSON.parse(rawEmps) : [...INITIAL_EMPLOYEES];
-        const existingIdx = emps.findIndex(e => e.id === demoUser.id || e.email.toLowerCase() === demoUser.email.toLowerCase());
-        if (existingIdx === -1) {
-          emps.push(demoUser);
-          localStorage.setItem("df_employees", JSON.stringify(emps));
-        } else {
-          // Merge with stored record to respect any existing changes
-          demoUser = { ...demoUser, ...emps[existingIdx], role: normalizedRole };
-        }
-      } catch (err) {
-        console.warn("Could not sync mock employee roster:", err);
-      }
-
-      const userObj = {
-        uid: demoUser.id,
-        email: demoUser.email,
-        displayName: demoUser.name,
-        role: normalizedRole
-      };
-      const profileObj = { ...demoUser, role: normalizedRole };
-
-      const session = {
-        user: userObj,
-        profile: profileObj,
-        role: normalizedRole
-      };
-
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
-      localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(session));
-
-      setCurrentUser(userObj);
-      setUserRole(normalizedRole);
-      setUserProfile(profileObj);
-
-      return session;
-    } catch (err) {
-      const errMsg = err.message || "Quick login failed";
-      setError(errMsg);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Switch role on-the-fly without wiping session data
-  const switchRole = (targetRole) => {
-    const normalizedRole = targetRole?.toLowerCase() === "admin" ? "admin" : "employee";
-    
-    if (!currentUser || !userProfile) {
-      return quickLogin(normalizedRole);
-    }
-
-    const updatedUser = {
-      ...currentUser,
-      role: normalizedRole
-    };
-
-    const updatedProfile = {
-      ...userProfile,
-      role: normalizedRole
-    };
-
-    const session = {
-      user: updatedUser,
-      profile: updatedProfile,
-      role: normalizedRole
-    };
-
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
-    localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(session));
-
-    // Update role in mock directory if present
-    try {
-      const rawEmps = localStorage.getItem("df_employees");
-      if (rawEmps) {
-        const emps = JSON.parse(rawEmps);
-        const idx = emps.findIndex(e => e.id === updatedProfile.id);
-        if (idx !== -1) {
-          emps[idx] = { ...emps[idx], role: normalizedRole };
-          localStorage.setItem("df_employees", JSON.stringify(emps));
-        }
-      }
-    } catch (err) {
-      console.warn("Error updating mock directory role:", err);
-    }
-
-    setCurrentUser(updatedUser);
-    setUserRole(normalizedRole);
-    setUserProfile(updatedProfile);
-
-    return session;
-  };
+  // Quick Login and Switch Role removed for production
 
   // Logout method
   const logout = async () => {
@@ -320,20 +402,25 @@ export const AuthProvider = ({ children }) => {
       if (typeof userDataOrEmail === "object" && userDataOrEmail !== null) {
         emailVal = userDataOrEmail.email;
         passVal = userDataOrEmail.password || "password123";
-        nameVal = userDataOrEmail.displayName || userDataOrEmail.name || emailVal?.split("@")[0];
+        nameVal = userDataOrEmail.displayName || userDataOrEmail.name || (emailVal?.trim().toLowerCase() === "admin@dayflow.com" ? "Kavitha Sundaram" : (emailVal?.trim().toLowerCase() === "employee@dayflow.com" ? "Karthik Subramanian" : emailVal?.split("@")[0]));
         roleVal = userDataOrEmail.role || "employee";
         deptVal = userDataOrEmail.department || "Engineering";
         extraFields = userDataOrEmail;
       } else {
         emailVal = userDataOrEmail;
         passVal = password || "password123";
-        nameVal = displayName || emailVal?.split("@")[0];
+        nameVal = displayName || (emailVal?.trim().toLowerCase() === "admin@dayflow.com" ? "Kavitha Sundaram" : (emailVal?.trim().toLowerCase() === "employee@dayflow.com" ? "Karthik Subramanian" : emailVal?.split("@")[0]));
         roleVal = role || "employee";
         deptVal = department || "Engineering";
       }
 
+      if (emailVal?.trim().toLowerCase() === "admin@dayflow.com") {
+        roleVal = "admin";
+        deptVal = "Human Resources";
+      }
+
       const result = await authService.signup(emailVal, passVal, nameVal, roleVal, deptVal);
-      
+
       const newProfile = { ...result.profile, ...extraFields, role: roleVal };
       const newUser = {
         uid: result.user.uid || newProfile.id,
@@ -371,7 +458,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const uid = currentUser.uid;
       const updated = await profileService.updateProfile(uid, data);
-      
+
       const mergedProfile = { ...(userProfile || {}), ...(updated || data) };
       const updatedUser = {
         ...currentUser,
@@ -412,8 +499,6 @@ export const AuthProvider = ({ children }) => {
     error,
     errors: error, // Alias
     login,
-    quickLogin,
-    switchRole,
     logout,
     signup,
     updateProfileDetails,

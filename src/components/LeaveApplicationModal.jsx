@@ -65,7 +65,7 @@ export const LeaveApplicationModal = ({ isOpen, onClose }) => {
       reason: reason.trim()
     };
 
-    console.log("Leave Request Submitted:", payload);
+    // Leave request validation passed
 
     try {
       setIsSubmitting(true);
