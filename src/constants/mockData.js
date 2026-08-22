@@ -1,10 +1,37 @@
-// Mock Data for Dayflow HRMS (Fallback local database)
+// Mock Data for Dayflow HRMS (Fallback local database & Demo Pool)
+
+export const DEMO_USERS = {
+  admin: {
+    id: "emp-01",
+    name: "Eleanor Vance",
+    email: "admin@dayflow.internal",
+    role: "admin",
+    department: "Human Resources",
+    position: "HR Director",
+    joinDate: "2024-01-15",
+    status: "Active",
+    phone: "+1 (555) 019-2834",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+  },
+  employee: {
+    id: "emp-02",
+    name: "Alex Morgan",
+    email: "alex.morgan@dayflow.internal",
+    role: "employee",
+    department: "Engineering",
+    position: "Senior Frontend Engineer",
+    joinDate: "2024-03-10",
+    status: "Active",
+    phone: "+1 (555) 014-9988",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
+  }
+};
 
 export const INITIAL_EMPLOYEES = [
   {
     id: "emp-01",
-    name: "Admin User",
-    email: "admin@dayflow.com",
+    name: "Eleanor Vance",
+    email: "admin@dayflow.internal",
     role: "admin",
     department: "Human Resources",
     position: "HR Director",
@@ -15,8 +42,8 @@ export const INITIAL_EMPLOYEES = [
   },
   {
     id: "emp-02",
-    name: "John Doe",
-    email: "employee@dayflow.com",
+    name: "Alex Morgan",
+    email: "alex.morgan@dayflow.internal",
     role: "employee",
     department: "Engineering",
     position: "Senior Frontend Engineer",
@@ -66,7 +93,7 @@ export const INITIAL_EMPLOYEES = [
 export const INITIAL_ATTENDANCE = [
   {
     id: "att-01",
-    employeeId: "emp-02", // John Doe
+    employeeId: "emp-02", // Alex Morgan
     date: "2026-08-18",
     punchIn: "08:55",
     punchOut: "17:30",
@@ -75,7 +102,7 @@ export const INITIAL_ATTENDANCE = [
   },
   {
     id: "att-02",
-    employeeId: "emp-02", // John Doe
+    employeeId: "emp-02", // Alex Morgan
     date: "2026-08-19",
     punchIn: "09:15",
     punchOut: "18:05",
@@ -84,7 +111,7 @@ export const INITIAL_ATTENDANCE = [
   },
   {
     id: "att-03",
-    employeeId: "emp-02", // John Doe
+    employeeId: "emp-02", // Alex Morgan
     date: "2026-08-20",
     punchIn: "08:45",
     punchOut: "17:15",
@@ -93,7 +120,7 @@ export const INITIAL_ATTENDANCE = [
   },
   {
     id: "att-04",
-    employeeId: "emp-02", // John Doe
+    employeeId: "emp-02", // Alex Morgan
     date: "2026-08-21",
     punchIn: "09:05",
     punchOut: "17:45",
@@ -123,8 +150,8 @@ export const INITIAL_ATTENDANCE = [
 export const INITIAL_LEAVES = [
   {
     id: "lv-01",
-    employeeId: "emp-02", // John Doe
-    employeeName: "John Doe",
+    employeeId: "emp-02", // Alex Morgan
+    employeeName: "Alex Morgan",
     type: "Sick Leave",
     startDate: "2026-08-10",
     endDate: "2026-08-11",
@@ -135,8 +162,8 @@ export const INITIAL_LEAVES = [
   },
   {
     id: "lv-02",
-    employeeId: "emp-02", // John Doe
-    employeeName: "John Doe",
+    employeeId: "emp-02", // Alex Morgan
+    employeeName: "Alex Morgan",
     type: "Annual Leave",
     startDate: "2026-09-01",
     endDate: "2026-09-05",

@@ -1,4 +1,4 @@
-import { auth, db, isFirebaseConfigured } from "./firebase";
+import { auth, db, isFirebaseConfigured } from "./firebase.js";
 import { 
   signInWithEmailAndPassword, 
   signOut, 
@@ -6,7 +6,7 @@ import {
   updateProfile
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { INITIAL_EMPLOYEES } from "../constants/mockData";
+import { INITIAL_EMPLOYEES, DEMO_USERS } from "../constants/mockData.js";
 
 // Local storage helpers for mock mode
 const getMockEmployees = () => {
@@ -15,7 +15,12 @@ const getMockEmployees = () => {
     localStorage.setItem("df_employees", JSON.stringify(INITIAL_EMPLOYEES));
     return INITIAL_EMPLOYEES;
   }
-  return JSON.parse(data);
+  try {
+    return JSON.parse(data);
+  } catch {
+    localStorage.setItem("df_employees", JSON.stringify(INITIAL_EMPLOYEES));
+    return INITIAL_EMPLOYEES;
+  }
 };
 
 export const authService = {
@@ -39,7 +44,8 @@ export const authService = {
           email: email,
           role: "employee", // Default role
           department: "Engineering",
-          status: "Active"
+          status: "Active",
+          avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`
         };
         await setDoc(userDocRef, defaultProfile);
         return {
@@ -50,17 +56,52 @@ export const authService = {
     } else {
       // Mock login validation
       const employees = getMockEmployees();
-      const employee = employees.find(
-        emp => emp.email.toLowerCase() === email.toLowerCase()
+      const normalizedEmail = (email || "").trim().toLowerCase();
+      
+      let employee = employees.find(
+        emp => emp.email.toLowerCase() === normalizedEmail
       );
+      
+      // Check demo aliases if not directly matched by email
+      if (!employee) {
+        if (
+          normalizedEmail === "admin" || 
+          normalizedEmail === "admin@dayflow.internal" || 
+          normalizedEmail === "admin@dayflow.com"
+        ) {
+          employee = DEMO_USERS?.admin || employees.find(e => e.role === "admin");
+        } else if (
+          normalizedEmail === "employee" || 
+          normalizedEmail === "alex.morgan@dayflow.internal" || 
+          normalizedEmail === "alex.morgan@dayflow.com" || 
+          normalizedEmail === "employee@dayflow.com"
+        ) {
+          employee = DEMO_USERS?.employee || employees.find(e => e.role === "employee");
+        }
+      }
       
       if (!employee) {
         throw new Error("auth/user-not-found");
       }
       
-      // For mock simplicity, match password as email prefix + '123' (e.g. admin123, employee123)
-      const expectedPassword = email.split('@')[0] + "123";
-      if (password !== expectedPassword && password !== "password123") {
+      // Allow standard demo passwords or prefix123
+      const emailPrefix = employee.email.split('@')[0];
+      const validPasswords = [
+        "password",
+        "password123",
+        `${emailPrefix}123`,
+        "admin123",
+        "employee123",
+        "alex123",
+        "123456"
+      ];
+      
+      const isPasswordValid = 
+        validPasswords.includes(password) || 
+        password === `${emailPrefix}123` ||
+        (employee.password && employee.password === password);
+
+      if (!isPasswordValid) {
         throw new Error("auth/wrong-password");
       }
       
@@ -69,6 +110,7 @@ export const authService = {
           uid: employee.id,
           email: employee.email,
           displayName: employee.name,
+          role: employee.role
         },
         profile: employee
       };
@@ -95,7 +137,8 @@ export const authService = {
         department: department,
         status: "Active",
         joinDate: new Date().toISOString().split('T')[0],
-        phone: ""
+        phone: "",
+        avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`
       };
       
       await setDoc(doc(db, "users", userCredential.user.uid), newProfile);
@@ -106,17 +149,18 @@ export const authService = {
     } else {
       // Mock Signup
       const employees = getMockEmployees();
-      if (employees.some(emp => emp.email.toLowerCase() === email.toLowerCase())) {
+      if (employees.some(emp => emp.email.toLowerCase() === (email || "").trim().toLowerCase())) {
         throw new Error("auth/email-already-in-use");
       }
 
       const newId = `emp-${Date.now()}`;
       const newProfile = {
         id: newId,
-        name: displayName,
+        name: displayName || email.split("@")[0],
         email: email,
-        role: role,
-        department: department,
+        role: role || "employee",
+        department: department || "Engineering",
+        position: "Staff Member",
         status: "Active",
         joinDate: new Date().toISOString().split('T')[0],
         phone: "",
@@ -130,7 +174,8 @@ export const authService = {
         user: {
           uid: newId,
           email: email,
-          displayName: displayName
+          displayName: newProfile.name,
+          role: newProfile.role
         },
         profile: newProfile
       };
