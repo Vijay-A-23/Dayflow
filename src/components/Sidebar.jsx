@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { 
   LayoutDashboard, 
@@ -8,11 +8,14 @@ import {
   User, 
   Users, 
   X,
-  FileSpreadsheet
+  LogOut,
+  Shield,
+  ArrowLeftRight
 } from "lucide-react";
 
 export const Sidebar = ({ isOpen, onClose }) => {
-  const { userRole } = useAuth();
+  const { userRole, switchRole, logout } = useAuth();
+  const navigate = useNavigate();
 
   const links = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -29,6 +32,17 @@ export const Sidebar = ({ isOpen, onClose }) => {
   const baseClasses = "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200";
   const activeClasses = "bg-violet-600 text-white shadow-lg shadow-violet-600/30";
   const inactiveClasses = "text-slate-400 hover:bg-slate-800 hover:text-white";
+
+  const handleMobileLogout = async () => {
+    onClose();
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
+  const handleMobileRoleSwitch = () => {
+    const nextRole = userRole === "admin" ? "employee" : "admin";
+    if (switchRole) switchRole(nextRole);
+  };
 
   return (
     <>
@@ -51,7 +65,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           <span className="font-display text-lg font-bold text-white">Menu</span>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -76,6 +90,28 @@ export const Sidebar = ({ isOpen, onClose }) => {
             );
           })}
         </nav>
+
+        {/* Mobile Role Switch & Logout (Visible only on mobile inside drawer) */}
+        <div className="lg:hidden px-4 pb-3 space-y-2">
+          <button
+            onClick={handleMobileRoleSwitch}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs font-medium text-slate-300 hover:bg-slate-800"
+          >
+            <div className="flex items-center gap-2">
+              <Shield className="h-3.5 w-3.5 text-violet-400" />
+              <span className="capitalize">Role: {userRole || "employee"}</span>
+            </div>
+            <ArrowLeftRight className="h-3 w-3 text-slate-500" />
+          </button>
+
+          <button
+            onClick={handleMobileLogout}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-semibold text-rose-400 hover:bg-rose-500/20"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span>Sign Out</span>
+          </button>
+        </div>
 
         {/* Sidebar Footer Info */}
         <div className="border-t border-slate-800 p-4">

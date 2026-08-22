@@ -1,10 +1,23 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { isFirebaseConfigured } from "../services/firebase";
-import { LogOut, Bell, Menu, Database, ShieldAlert, Sparkles } from "lucide-react";
+import { RoleSwitcher } from "./RoleSwitcher";
+import { LogOut, Bell, Menu, Database, Sparkles } from "lucide-react";
 
 export const Navbar = ({ onMenuToggle }) => {
-  const { userProfile, logout } = useAuth();
+  const { userProfile, userRole, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login", { replace: true });
+    } catch (err) {
+      console.error("Logout navigation failed:", err);
+      navigate("/login", { replace: true });
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-slate-800 bg-slate-900/80 px-6 backdrop-blur-md">
@@ -12,7 +25,7 @@ export const Navbar = ({ onMenuToggle }) => {
       <div className="flex items-center gap-4">
         <button
           onClick={onMenuToggle}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden cursor-pointer"
           aria-label="Toggle sidebar"
         >
           <Menu className="h-6 w-6" />
@@ -28,7 +41,7 @@ export const Navbar = ({ onMenuToggle }) => {
         </div>
       </div>
 
-      {/* Center status badges */}
+      {/* Center status badges & Role switcher */}
       <div className="hidden sm:flex items-center gap-3">
         {isFirebaseConfigured ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400 border border-emerald-500/20">
@@ -36,16 +49,21 @@ export const Navbar = ({ onMenuToggle }) => {
             Cloud Database Connected
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400 border border-amber-500/20">
-            <Database className="h-3 w-3" />
-            Local Sandbox (Mock Mode)
-          </span>
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400 border border-amber-500/20">
+              <Database className="h-3 w-3" />
+              Local Sandbox
+            </span>
+
+            {/* Quick Live Role Switcher */}
+            <RoleSwitcher />
+          </div>
         )}
       </div>
 
       {/* User profile & actions */}
       <div className="flex items-center gap-4">
-        <button className="relative rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
+        <button className="relative rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer">
           <Bell className="h-5 w-5" />
           <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-violet-500 ring-2 ring-slate-900" />
         </button>
@@ -54,7 +72,7 @@ export const Navbar = ({ onMenuToggle }) => {
         <div className="flex items-center gap-3 border-l border-slate-800 pl-4">
           <div className="text-right hidden md:block">
             <p className="text-sm font-semibold text-white">{userProfile?.name || "User"}</p>
-            <p className="text-xs text-slate-400 capitalize">{userProfile?.role}</p>
+            <p className="text-xs text-slate-400 capitalize">{userProfile?.role || userRole || "Employee"}</p>
           </div>
           
           <img
@@ -64,9 +82,9 @@ export const Navbar = ({ onMenuToggle }) => {
           />
 
           <button
-            onClick={logout}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-rose-400"
-            title="Log out"
+            onClick={handleLogout}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-rose-400 cursor-pointer transition-colors"
+            title="Log out of Dayflow"
           >
             <LogOut className="h-5 w-5" />
           </button>
