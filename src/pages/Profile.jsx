@@ -1,30 +1,112 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { User, Phone, Mail, Building, Briefcase, Calendar, ShieldCheck, Check, Edit3, X } from "lucide-react";
+import { useHR } from "../context/HRContext";
+import { 
+  User, 
+  Briefcase, 
+  DollarSign, 
+  Lock, 
+  Check, 
+  Edit3, 
+  X, 
+  Calendar, 
+  Building, 
+  ShieldCheck,
+  Save,
+  LockKeyhole,
+  Info
+} from "lucide-react";
 
 export const Profile = () => {
-  const { userProfile, updateProfileDetails } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { userProfile, userRole } = useAuth();
+  const { employees, updateEmployee, loading: hrLoading } = useHR();
 
+  // Redirect check / Safe Fallback:
+  // If role is employee and they try to target another user ID, safe fallback to self
+  const rawTargetId = searchParams.get("id");
+  const isEmployee = userRole === "employee";
+  const targetId = isEmployee ? userProfile?.id : (rawTargetId || userProfile?.id);
+
+  // Tabs: "personal" | "job" | "financial"
+  const [activeTab, setActiveTab] = useState("personal");
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(userProfile?.name || "");
-  const [phone, setPhone] = useState(userProfile?.phone || "");
+
+  // Find targeted employee profile
+  const targetProfile = employees.find(e => e.id === targetId) || userProfile;
+
+  // Form states
+  const [formData, setFormData] = useState({
+    name: "",
+    personalEmail: "",
+    email: "", // Work Email
+    phone: "",
+    emergencyContact: "",
+    address: "",
+    dob: "",
+    
+    department: "Engineering",
+    position: "",
+    manager: "",
+    employmentType: "Full-time",
+    workLocation: "HQ - Office",
+    
+    salary: "",
+    bankName: "",
+    bankAccount: "",
+    ifscCode: "",
+    taxId: ""
+  });
+
   const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Sync state with targeted employee profile when changed
+  useEffect(() => {
+    if (targetProfile) {
+      setFormData({
+        name: targetProfile.name || "",
+        personalEmail: targetProfile.personalEmail || "",
+        email: targetProfile.email || "",
+        phone: targetProfile.phone || "",
+        emergencyContact: targetProfile.emergencyContact || "",
+        address: targetProfile.address || "",
+        dob: targetProfile.dob || "",
+        
+        department: targetProfile.department || "Engineering",
+        position: targetProfile.position || "",
+        manager: targetProfile.manager || "",
+        employmentType: targetProfile.employmentType || "Full-time",
+        workLocation: targetProfile.workLocation || "HQ - Office",
+        
+        salary: targetProfile.salary || "",
+        bankName: targetProfile.bankName || "",
+        bankAccount: targetProfile.bankAccount || "",
+        ifscCode: targetProfile.ifscCode || "",
+        taxId: targetProfile.taxId || ""
+      });
+    }
+  }, [targetId, targetProfile]);
+
+  // Check if Employee tries to access unauthorized ID and redirect them
+  useEffect(() => {
+    if (isEmployee && rawTargetId && rawTargetId !== userProfile?.id) {
+      // Force URL path back to self
+      navigate("/profile", { replace: true });
+    }
+  }, [rawTargetId, isEmployee, userProfile, navigate]);
+
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
-
     setLoading(true);
     setSuccessMsg("");
     try {
-      await updateProfileDetails({
-        name,
-        phone
-      });
+      await updateEmployee(targetProfile.id, formData);
       setIsEditing(false);
       setSuccessMsg("Profile details updated successfully!");
-      setTimeout(() => setSuccessMsg(""), 3000);
+      setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
       alert("Failed to update profile: " + err.message);
     } finally {
@@ -33,169 +115,424 @@ export const Profile = () => {
   };
 
   const handleCancel = () => {
-    setName(userProfile?.name || "");
-    setPhone(userProfile?.phone || "");
+    setFormData({
+      name: targetProfile.name || "",
+      personalEmail: targetProfile.personalEmail || "",
+      email: targetProfile.email || "",
+      phone: targetProfile.phone || "",
+      emergencyContact: targetProfile.emergencyContact || "",
+      address: targetProfile.address || "",
+      dob: targetProfile.dob || "",
+      
+      department: targetProfile.department || "Engineering",
+      position: targetProfile.position || "",
+      manager: targetProfile.manager || "",
+      employmentType: targetProfile.employmentType || "Full-time",
+      workLocation: targetProfile.workLocation || "HQ - Office",
+      
+      salary: targetProfile.salary || "",
+      bankName: targetProfile.bankName || "",
+      bankAccount: targetProfile.bankAccount || "",
+      ifscCode: targetProfile.ifscCode || "",
+      taxId: targetProfile.taxId || ""
+    });
     setIsEditing(false);
   };
 
+  const handleInputChange = (field, val) => {
+    setFormData(prev => ({ ...prev, [field]: val }));
+  };
+
+  const isFieldReadOnly = (tabName, fieldName) => {
+    if (!isEditing) return true; // not in edit mode
+    if (userRole === "admin") return false; // admin has full access
+
+    // Employee limits:
+    if (tabName === "personal") {
+      // Personal Details: Phone, Address, and Emergency Contact are editable; Name & Emails are locked
+      if (fieldName === "phone" || fieldName === "address" || fieldName === "emergencyContact") {
+        return false;
+      }
+    }
+    // All other fields in job & financials are strictly locked
+    return true;
+  };
+
+  const getInitials = (fullName) => {
+    if (!fullName) return "U";
+    return fullName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  };
+
+  const isSelf = targetProfile?.id === userProfile?.id;
+
   return (
-    <div className="space-y-6 p-6 max-w-4xl mx-auto">
-      {/* Page Title */}
-      <div>
-        <h1 className="font-display text-2xl font-extrabold text-white">My Profile</h1>
-        <p className="text-slate-400 text-sm mt-1">Manage your personal information and contact details.</p>
+    <div className="space-y-6 p-6 max-w-5xl mx-auto">
+      
+      {/* Page Title & Status Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-extrabold text-white">
+            {isSelf ? "My Profile" : "Employee Profile"}
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            {isSelf 
+              ? "Manage your settings, emergency contacts, and banking channels." 
+              : `Review credentials and organizational metrics for ${targetProfile?.name}.`
+            }
+          </p>
+        </div>
+
+        {successMsg && (
+          <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm text-emerald-400 animate-pulse">
+            <Check className="h-4 w-4 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
       </div>
 
-      {successMsg && (
-        <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3.5 text-sm text-emerald-400">
-          <Check className="h-5 w-5 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {/* Main card */}
-      <div className="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+      <form onSubmit={handleSave} className="space-y-6">
         
-        {/* Banner area */}
-        <div className="h-32 bg-gradient-to-r from-violet-900 to-indigo-900" />
-        
-        {/* Profile Card Header */}
-        <div className="relative px-6 pb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between -mt-16 mb-6 gap-4">
-            <div className="flex items-end gap-4">
-              <img
-                src={userProfile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"}
-                alt={userProfile?.name}
-                className="h-28 w-28 rounded-2xl object-cover border-4 border-slate-900 bg-slate-900 shadow-xl"
-              />
-              <div className="mb-2">
-                <h2 className="font-display text-2xl font-extrabold text-white">
-                  {userProfile?.name}
-                </h2>
-                <p className="text-violet-400 text-sm font-semibold">{userProfile?.position}</p>
+        {/* Profile Header Hero Card */}
+        <div className="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+          <div className="h-28 bg-gradient-to-r from-violet-900/60 to-indigo-900/40" />
+          
+          <div className="relative px-6 pb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between -mt-14 mb-6 gap-4">
+              <div className="flex items-end gap-4">
+                {targetProfile?.avatar ? (
+                  <img
+                    src={targetProfile.avatar}
+                    alt={targetProfile.name}
+                    className="h-24 w-24 rounded-2xl object-cover border-4 border-slate-900 bg-slate-900 shadow-xl"
+                  />
+                ) : (
+                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-slate-900 bg-slate-800 text-white font-display text-3xl font-extrabold shadow-xl">
+                    {getInitials(targetProfile?.name)}
+                  </div>
+                )}
+                
+                <div className="mb-1 space-y-1">
+                  <div className="flex items-center flex-wrap gap-2.5">
+                    <h2 className="font-display text-xl md:text-2xl font-extrabold text-white">
+                      {targetProfile?.name}
+                    </h2>
+                    <span className="inline-flex rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-400 border border-violet-500/10 capitalize">
+                      {targetProfile?.role}
+                    </span>
+                  </div>
+                  <p className="text-slate-350 text-xs md:text-sm font-medium flex items-center gap-1.5">
+                    <Building className="h-3.5 w-3.5 text-slate-500" />
+                    {targetProfile?.position || "Position Unset"} &bull; {targetProfile?.department}
+                  </p>
+                </div>
               </div>
+
+              {/* Master Edit Actions */}
+              {(isSelf || userRole === "admin") && (
+                <div className="flex gap-2">
+                  {isEditing ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleCancel}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-all cursor-pointer"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={loading || hrLoading}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-600/25 hover:bg-violet-500 transition-all cursor-pointer"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        Save Changes
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700/60 px-4 py-2.5 text-xs font-semibold text-white transition-all active:scale-[0.98] cursor-pointer"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Edit Profile
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {!isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700/60 px-4 py-2 text-sm font-semibold text-white transition-all active:scale-[0.98]"
-              >
-                <Edit3 className="h-4 w-4" />
-                Edit Profile
-              </button>
-            )}
+            {/* Quick Joined Date Badge */}
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <Calendar className="h-3.5 w-3.5 text-slate-500" />
+              <span>Joined on {targetProfile?.joinDate || "N/A"}</span>
+            </div>
           </div>
+        </div>
 
-          {/* Details panel */}
-          {isEditing ? (
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Display Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full rounded-xl border border-slate-850 bg-slate-950/60 py-2.5 px-3.5 text-sm text-white focus:border-violet-500 focus:bg-slate-950"
+        {/* Tab Navigation Menu */}
+        <div className="flex border-b border-slate-800/80 gap-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab("personal")}
+            className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+              activeTab === "personal"
+                ? "border-violet-500 text-white"
+                : "border-transparent text-slate-400 hover:text-white"
+            }`}
+          >
+            <User className="h-4 w-4" />
+            Personal Details
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => setActiveTab("job")}
+            className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+              activeTab === "job"
+                ? "border-violet-500 text-white"
+                : "border-transparent text-slate-400 hover:text-white"
+            }`}
+          >
+            <Briefcase className="h-4 w-4" />
+            Job & Organization
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("financial")}
+            className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+              activeTab === "financial"
+                ? "border-violet-500 text-white"
+                : "border-transparent text-slate-400 hover:text-white"
+            }`}
+          >
+            <DollarSign className="h-4 w-4" />
+            Salary & Financials
+          </button>
+        </div>
+
+        {/* Tab Panel Content */}
+        <div className="glass-panel rounded-2xl p-6 border border-slate-800">
+          
+          {/* TAB 1: Personal Details */}
+          {activeTab === "personal" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <h3 className="font-display text-base font-bold text-white">Personal Information</h3>
+                <span className="text-slate-500 text-[10px] uppercase font-semibold tracking-wider">Tab 1 of 3</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                
+                {/* Full Name */}
+                {renderInputRow("Full Name", "name", formData.name, "personal", "text", "Alexander Pierce")}
+                
+                {/* Personal Email */}
+                {renderInputRow("Personal Email", "personalEmail", formData.personalEmail, "personal", "email", "alex@personal.com")}
+
+                {/* Phone */}
+                {renderInputRow("Phone Number", "phone", formData.phone, "personal", "text", "+1 (555) 012-3456")}
+
+                {/* Emergency contact */}
+                {renderInputRow("Emergency Contact", "emergencyContact", formData.emergencyContact, "personal", "text", "Jane Pierce (+1 555-0987)")}
+
+                {/* Residential address */}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-semibold text-slate-350 flex items-center gap-1.5">
+                    <span>Residential Address</span>
+                    {isFieldReadOnly("personal", "address") && <Lock className="h-3 w-3 text-slate-500 shrink-0" />}
+                  </label>
+                  <textarea
+                    rows={3}
+                    disabled={isFieldReadOnly("personal", "address")}
+                    value={formData.address}
+                    onChange={(e) => handleInputChange("address", e.target.value)}
+                    placeholder="Enter street address, city, and zip..."
+                    className={`w-full rounded-xl border border-slate-800 bg-slate-950/40 py-2.5 px-3.5 text-sm text-white placeholder-slate-600 focus:border-violet-500 ${
+                      isFieldReadOnly("personal", "address") ? "opacity-60 cursor-not-allowed bg-slate-900/20" : ""
+                    }`}
                   />
                 </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Contact Number</label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full rounded-xl border border-slate-850 bg-slate-950/60 py-2.5 px-3.5 text-sm text-white focus:border-violet-500 focus:bg-slate-950"
-                  />
-                </div>
+
+                {/* Date of Birth */}
+                {renderInputRow("Date of Birth", "dob", formData.dob, "personal", "date", "")}
+
               </div>
-
-              <div className="flex gap-3 justify-end border-t border-slate-800/60 pt-4 mt-6">
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="rounded-xl border border-slate-850 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-900 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 hover:bg-violet-500 transition-all disabled:opacity-50"
-                >
-                  {loading ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          ) : (
-            // Static display list
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-950/20 p-5 rounded-2xl border border-slate-800/40">
-              
-              <div className="space-y-4">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">Employment Information</h3>
-                
-                <div className="flex items-center gap-3 text-sm text-slate-300">
-                  <Building className="h-4 w-4 text-slate-500 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-500">Department</p>
-                    <p className="font-semibold text-white">{userProfile?.department}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-sm text-slate-300">
-                  <Briefcase className="h-4 w-4 text-slate-500 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-500">Role Title</p>
-                    <p className="font-semibold text-white">{userProfile?.position}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-sm text-slate-300">
-                  <Calendar className="h-4 w-4 text-slate-500 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-500">Date of Joining</p>
-                    <p className="font-semibold text-white">{userProfile?.joinDate || "N/A"}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">Contact & Credentials</h3>
-                
-                <div className="flex items-center gap-3 text-sm text-slate-300">
-                  <Mail className="h-4 w-4 text-slate-500 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-500">Work Email</p>
-                    <p className="font-semibold text-white">{userProfile?.email}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-sm text-slate-300">
-                  <Phone className="h-4 w-4 text-slate-500 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-500">Phone</p>
-                    <p className="font-semibold text-white">{userProfile?.phone || "Not set"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-sm text-slate-300">
-                  <ShieldCheck className="h-4 w-4 text-slate-500 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-500">System Role</p>
-                    <p className="font-semibold text-white capitalize">{userProfile?.role}</p>
-                  </div>
-                </div>
-              </div>
-
             </div>
           )}
+
+          {/* TAB 2: Job & Organization */}
+          {activeTab === "job" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display text-base font-bold text-white">Employment & Hierarchy</h3>
+                  {isEmployee && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/50 px-2.5 py-0.5 text-[10px] font-semibold text-slate-400 border border-slate-800">
+                      <LockKeyhole className="h-3 w-3 text-violet-500" />
+                      Managed by HR
+                    </span>
+                  )}
+                </div>
+                <span className="text-slate-500 text-[10px] uppercase font-semibold tracking-wider">Tab 2 of 3</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                
+                {/* Employee ID */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-350 flex items-center gap-1.5">
+                    <span>Employee ID</span>
+                    <Lock className="h-3 w-3 text-slate-500 shrink-0" />
+                  </label>
+                  <input
+                    type="text"
+                    disabled={true}
+                    value={targetProfile.id}
+                    className="w-full rounded-xl border border-slate-850 bg-slate-900/20 py-2.5 px-3.5 text-sm text-slate-400 opacity-60 cursor-not-allowed"
+                  />
+                </div>
+
+                {/* Designation */}
+                {renderInputRow("Designation / Title", "position", formData.position, "job", "text", "Staff Software Engineer")}
+
+                {/* Department dropdown */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-350 flex items-center gap-1.5">
+                    <span>Department</span>
+                    {isFieldReadOnly("job", "department") && <Lock className="h-3 w-3 text-slate-500 shrink-0" />}
+                  </label>
+                  <select
+                    disabled={isFieldReadOnly("job", "department")}
+                    value={formData.department}
+                    onChange={(e) => handleInputChange("department", e.target.value)}
+                    className={`w-full rounded-xl border border-slate-800 bg-slate-950/40 py-2.5 px-3 text-sm text-slate-300 focus:border-violet-500 cursor-pointer ${
+                      isFieldReadOnly("job", "department") ? "opacity-60 cursor-not-allowed bg-slate-900/20" : ""
+                    }`}
+                  >
+                    <option value="Human Resources">Human Resources</option>
+                    <option value="Engineering">Engineering</option>
+                    <option value="Design">Design</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Sales">Sales</option>
+                    <option value="Finance">Finance</option>
+                  </select>
+                </div>
+
+                {/* Reporting Manager */}
+                {renderInputRow("Reporting Manager", "manager", formData.manager, "job", "text", "Sarah Jenkins")}
+
+                {/* Employment Type dropdown */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-350 flex items-center gap-1.5">
+                    <span>Employment Type</span>
+                    {isFieldReadOnly("job", "employmentType") && <Lock className="h-3 w-3 text-slate-500 shrink-0" />}
+                  </label>
+                  <select
+                    disabled={isFieldReadOnly("job", "employmentType")}
+                    value={formData.employmentType}
+                    onChange={(e) => handleInputChange("employmentType", e.target.value)}
+                    className={`w-full rounded-xl border border-slate-800 bg-slate-950/40 py-2.5 px-3 text-sm text-slate-300 focus:border-violet-500 cursor-pointer ${
+                      isFieldReadOnly("job", "employmentType") ? "opacity-60 cursor-not-allowed bg-slate-900/20" : ""
+                    }`}
+                  >
+                    <option value="Full-time">Full-time</option>
+                    <option value="Contract">Contract</option>
+                  </select>
+                </div>
+
+                {/* Work Location */}
+                {renderInputRow("Work Location", "workLocation", formData.workLocation, "job", "text", "HQ - California")}
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: Salary & Financials */}
+          {activeTab === "financial" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display text-base font-bold text-white">Financial Details</h3>
+                  {isEmployee && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/50 px-2.5 py-0.5 text-[10px] font-semibold text-slate-400 border border-slate-800">
+                      <LockKeyhole className="h-3 w-3 text-violet-500" />
+                      Locked
+                    </span>
+                  )}
+                </div>
+                <span className="text-slate-500 text-[10px] uppercase font-semibold tracking-wider">Tab 3 of 3</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                
+                {/* Base Salary */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-355 flex items-center gap-1.5">
+                    <span>Base Salary (USD / Annual)</span>
+                    {isFieldReadOnly("financial", "salary") && <Lock className="h-3 w-3 text-slate-500 shrink-0" />}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute top-2.5 left-3 text-sm text-slate-500 font-semibold">$</span>
+                    <input
+                      type="number"
+                      disabled={isFieldReadOnly("financial", "salary")}
+                      value={formData.salary}
+                      onChange={(e) => handleInputChange("salary", e.target.value)}
+                      placeholder="95000"
+                      className={`w-full rounded-xl border border-slate-800 bg-slate-950/40 py-2.5 pl-7 pr-3.5 text-sm text-white focus:border-violet-500 ${
+                        isFieldReadOnly("financial", "salary") ? "opacity-60 cursor-not-allowed bg-slate-900/20" : ""
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Bank Name */}
+                {renderInputRow("Bank Name", "bankName", formData.bankName, "financial", "text", "Silicon Valley Bank")}
+
+                {/* Account Number */}
+                {renderInputRow("Account Number", "bankAccount", formData.bankAccount, "financial", "text", "998877665544")}
+
+                {/* IFSC/Routing */}
+                {renderInputRow("IFSC / Routing Code", "ifscCode", formData.ifscCode, "financial", "text", "SVB0002134")}
+
+                {/* Tax ID/PAN */}
+                {renderInputRow("Tax ID / PAN", "taxId", formData.taxId, "financial", "text", "ABCDE1234F")}
+
+              </div>
+            </div>
+          )}
+
         </div>
-      </div>
+
+      </form>
     </div>
   );
+
+  // Helper row renderer to make code clean
+  function renderInputRow(label, fieldName, value, tabName, type = "text", placeholder = "") {
+    const isReadOnly = isFieldReadOnly(tabName, fieldName);
+    return (
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-slate-350 flex items-center gap-1.5">
+          <span>{label}</span>
+          {isReadOnly && <Lock className="h-3 w-3 text-slate-505 shrink-0" />}
+        </label>
+        <input
+          type={type}
+          disabled={isReadOnly}
+          value={value}
+          onChange={(e) => handleInputChange(fieldName, e.target.value)}
+          placeholder={placeholder}
+          className={`w-full rounded-xl border border-slate-800 bg-slate-955/40 py-2.5 px-3.5 text-sm text-white placeholder-slate-600 focus:border-violet-500 ${
+            isReadOnly ? "opacity-60 cursor-not-allowed bg-slate-900/20" : ""
+          }`}
+        />
+      </div>
+    );
+  }
 };
+
 export default Profile;

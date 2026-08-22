@@ -15,7 +15,7 @@ export const useHR = () => {
 };
 
 export const HRProvider = ({ children }) => {
-  const { currentUser, userRole } = useAuth();
+  const { currentUser, userRole, updateProfileDetails } = useAuth();
   
   const [employees, setEmployees] = useState([]);
   const [leaves, setLeaves] = useState([]);
@@ -174,6 +174,45 @@ export const HRProvider = ({ children }) => {
     }
   };
 
+  // Delete Employee (Admin only)
+  const deleteEmployee = async (employeeId) => {
+    if (userRole !== "admin") return;
+    setLoading(true);
+    try {
+      await profileService.deleteEmployee(employeeId);
+      setEmployees(prev => prev.filter(e => e.id !== employeeId));
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update Employee (Admin or self)
+  const updateEmployee = async (id, updatedData) => {
+    if (userRole !== "admin" && id !== currentUser?.uid) return;
+    setLoading(true);
+    try {
+      let updated;
+      if (id === currentUser?.uid) {
+        // Update self via AuthContext
+        updated = await updateProfileDetails(updatedData);
+      } else {
+        // Admin updating someone else
+        updated = await profileService.updateProfile(id, updatedData);
+      }
+      // Update local list
+      setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updatedData } : e));
+      return updated;
+    } catch (error) {
+      console.error("Error updating employee profile:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <HRContext.Provider value={{
       employees,
@@ -186,7 +225,9 @@ export const HRProvider = ({ children }) => {
       rejectLeave,
       punchIn,
       punchOut,
-      addEmployee
+      addEmployee,
+      deleteEmployee,
+      updateEmployee
     }}>
       {children}
     </HRContext.Provider>

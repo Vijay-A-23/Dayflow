@@ -5,7 +5,8 @@ import {
   getDoc,
   updateDoc, 
   doc, 
-  setDoc 
+  setDoc,
+  deleteDoc
 } from "firebase/firestore";
 import { INITIAL_EMPLOYEES } from "../constants/mockData";
 
@@ -108,6 +109,20 @@ export const profileService = {
       list.push(newRecord);
       saveLocalEmployees(list);
       return newRecord;
+    }
+  },
+
+  // Delete employee (Admin operation)
+  deleteEmployee: async (employeeId) => {
+    if (isFirebaseConfigured) {
+      const docRef = doc(db, "users", employeeId);
+      await deleteDoc(docRef);
+      return true;
+    } else {
+      const list = getLocalEmployees();
+      const filtered = list.filter(emp => emp.id !== employeeId);
+      saveLocalEmployees(filtered);
+      return true;
     }
   }
 };
